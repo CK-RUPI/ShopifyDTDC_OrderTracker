@@ -273,10 +273,6 @@ export const notionProvider: DataProvider = {
         property: "Delivery Status",
         select: { does_not_equal: "Delivered" },
       });
-      filterConditions.push({
-        property: "Delivery Status",
-        select: { does_not_equal: "RTO Received" },
-      });
     }
 
     let filter: Record<string, unknown> | undefined;
@@ -295,6 +291,11 @@ export const notionProvider: DataProvider = {
       const num = parseInt(o.orderNumber.replace(/\D/g, ""), 10);
       return !isNaN(num) && num > 1025;
     });
+
+    // Client-side filter: hide "RTO Received" (can't filter in Notion until option exists)
+    if (filters?.hideDelivered) {
+      orders = orders.filter((o) => o.deliveryStatus !== "RTO Received");
+    }
 
     if (filters?.search) {
       const search = filters.search.toLowerCase();
@@ -467,11 +468,13 @@ export const notionProvider: DataProvider = {
       and: [
         { property: "Delivery Status", select: { does_not_equal: "Delivered" } },
         { property: "Delivery Status", select: { does_not_equal: "RTO" } },
-        { property: "Delivery Status", select: { does_not_equal: "RTO Received" } },
       ],
     });
 
     let orders = results.map((page) => parseOrder(page));
+
+    // Client-side filter: hide "RTO Received" (can't filter in Notion until option exists)
+    orders = orders.filter((o) => o.deliveryStatus !== "RTO Received");
 
     // Exclude test orders (#1025 and below)
     orders = orders.filter((o) => {
