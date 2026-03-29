@@ -5,6 +5,7 @@ import {
   DeliveryStatus,
   TrackingEvent,
   InfluencerShipment,
+  Product,
 } from "./types";
 
 const NOTION_API = "https://api.notion.com/v1";
@@ -238,6 +239,16 @@ function parseInfluencerShipment(page: Record<string, unknown>): InfluencerShipm
     }
   }
 
+  let products: Product[] = [];
+  const productsStr = getText(props["Products"]);
+  if (productsStr) {
+    try {
+      products = JSON.parse(productsStr);
+    } catch {
+      products = [];
+    }
+  }
+
   return {
     id: (page as { id: string }).id,
     label: getTitle(props["Label"]),
@@ -252,7 +263,43 @@ function parseInfluencerShipment(page: Record<string, unknown>): InfluencerShipm
     lastUpdated: getDate(props["Last Updated"]),
     trackingTimeline: timeline,
     createdAt: getDate(props["Created At"]),
+    products,
   };
+}
+
+export async function getInfluencerShipmentById(
+  pageId: string
+): Promise<InfluencerShipment | null> {
+  const res = await fetch(`${NOTION_API}/pages/${pageId}`, {
+    headers: headers(),
+  });
+  if (!res.ok) return null;
+  const page = await res.json();
+  return parseInfluencerShipment(page);
+}
+
+export async function updateInfluencerProducts(
+  pageId: string,
+  products: Product[]
+): Promise<void> {
+  const productsStr = JSON.stringify(products);
+  const res = await fetch(`${NOTION_API}/pages/${pageId}`, {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify({
+      properties: {
+        Products: {
+          rich_text: toRichTextBlocks(productsStr),
+        },
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const errorBody = await res.text();
+    console.error(`Notion PATCH failed for products on ${pageId}: ${res.status}`, errorBody);
+    throw new Error(`Notion update failed: ${res.status}`);
+  }
 }
 
 export const notionProvider: DataProvider = {

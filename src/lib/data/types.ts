@@ -51,6 +51,14 @@ export interface Order {
   deliveryEmailSent: boolean;
 }
 
+export interface Product {
+  id: string;
+  name: string;
+  imageUrl: string;
+  size: string;
+  productUrl: string;
+}
+
 export interface InfluencerShipment {
   id: string;
   label: string;
@@ -65,6 +73,7 @@ export interface InfluencerShipment {
   lastUpdated: string;
   trackingTimeline: TrackingEvent[];
   createdAt: string;
+  products?: Product[];
 }
 
 export interface OrderFilters {

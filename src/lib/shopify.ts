@@ -108,6 +108,43 @@ export async function getFulfilledOrders(): Promise<ShopifyOrder[]> {
   return allOrders;
 }
 
+export function extractProductHandle(url: string): string | null {
+  try {
+    const parsed = new URL(url.startsWith("http") ? url : `https://${url}`);
+    const match = parsed.pathname.match(/\/products\/([^/?#]+)/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getProductFromPublicUrl(
+  url: string,
+  handle: string
+): Promise<{ title: string; imageUrl: string } | null> {
+  try {
+    const parsed = new URL(url.startsWith("http") ? url : `https://${url}`);
+    const jsonUrl = `${parsed.origin}/products/${handle}.json`;
+
+    const res = await fetch(jsonUrl, {
+      headers: { Accept: "application/json" },
+    });
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const product = data?.product;
+    if (!product) return null;
+
+    return {
+      title: product.title || "",
+      imageUrl: product.images?.[0]?.src || product.image?.src || "",
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function formatShippingAddress(
   addr: ShopifyOrder["shipping_address"]
 ): string {
