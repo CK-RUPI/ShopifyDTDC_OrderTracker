@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "WebSearch",
-      "WebFetch(domain:www.dtdc.com)"
+      "WebFetch(domain:www.dtdc.com)",
+      "mcp__magic__21st_magic_component_inspiration",
+      "WebFetch(domain:www.urbannaari.co.in)",
+      "WebFetch(domain:nyquh7-g2.myshopify.com)"
     ]
   }
 }

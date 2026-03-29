@@ -1,0 +1,3 @@
+Send message option for new orders. For people whose address is not clear. Message to be sent via dashboard itself
+New orders to be shown here. Option to add tracking link to the page itself by adding tracking number in dashboard
+Msg/Mail to share to share review automatically to people 3 days after delivery.

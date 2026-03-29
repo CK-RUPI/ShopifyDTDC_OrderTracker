@@ -1,0 +1,125 @@
+export type DeliveryStatus =
+  | "Booked"
+  | "Picked Up"
+  | "In Transit"
+  | "At Destination"
+  | "Out for Delivery"
+  | "Delivered"
+  | "Undelivered"
+  | "Stuck"
+  | "RTO"
+  | "RTO Confirmed"
+  | "RTO Received"
+  | "Return Initiated"
+  | "Return Complete";
+
+export type EmailType = "delivery_confirmation" | "review_request";
+
+export interface TrackingEvent {
+  timestamp: string;
+  status: string;
+  description: string;
+  location: string;
+  branch: string;
+}
+
+export interface Order {
+  id: string; // Notion page ID
+  shopifyOrderId: string;
+  orderNumber: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  shippingAddress: string;
+  trackingNumber: string;
+  courierPartner: string;
+  paymentMethod: "COD" | "Prepaid";
+  orderTotal: number;
+  codCollectionStatus: "Pending" | "Collected" | "";
+  orderDate: string;
+  fulfilledDate: string;
+  deliveryStatus: DeliveryStatus;
+  originCity: string;
+  destinationCity: string;
+  expectedDeliveryDate: string;
+  deliveredDate: string;
+  deliveredTimestamp: string;
+  receiverName: string;
+  lastUpdated: string;
+  trackingTimeline: TrackingEvent[];
+  rtoTrackingNumber: string;
+  deliveryEmailSent: boolean;
+}
+
+export interface InfluencerShipment {
+  id: string;
+  label: string;
+  trackingNumber: string;
+  courierPartner: string;
+  deliveryStatus: DeliveryStatus;
+  originCity: string;
+  destinationCity: string;
+  expectedDeliveryDate: string;
+  deliveredDate: string;
+  receiverName: string;
+  lastUpdated: string;
+  trackingTimeline: TrackingEvent[];
+  createdAt: string;
+}
+
+export interface OrderFilters {
+  status?: DeliveryStatus;
+  search?: string;
+  hideDelivered?: boolean;
+}
+
+export interface DataProvider {
+  getOrders(filters?: OrderFilters): Promise<Order[]>;
+  upsertOrder(order: Omit<Order, "id">): Promise<Order>;
+  updateOrderTracking(
+    trackingNumber: string,
+    data: {
+      deliveryStatus: DeliveryStatus;
+      originCity: string;
+      destinationCity: string;
+      expectedDeliveryDate: string;
+      deliveredDate: string;
+      deliveredTimestamp: string;
+      receiverName: string;
+      lastUpdated: string;
+      trackingTimeline: TrackingEvent[];
+    }
+  ): Promise<void>;
+  getActiveOrders(): Promise<Order[]>;
+  updateDeliveryStatus(orderId: string, status: DeliveryStatus): Promise<void>;
+  updateCodStatus(
+    orderId: string,
+    status: "Pending" | "Collected"
+  ): Promise<void>;
+  updateRtoTracking(
+    orderId: string,
+    rtoTrackingNumber: string
+  ): Promise<void>;
+  markEmailSent(orderId: string): Promise<void>;
+  getOrderById(orderId: string): Promise<Order | null>;
+  // Influencer shipments
+  getInfluencerShipments(): Promise<InfluencerShipment[]>;
+  createInfluencerShipment(shipment: {
+    label: string;
+    trackingNumber: string;
+  }): Promise<InfluencerShipment>;
+  getActiveInfluencerShipments(): Promise<InfluencerShipment[]>;
+  updateInfluencerTracking(
+    trackingNumber: string,
+    data: {
+      deliveryStatus: DeliveryStatus;
+      originCity: string;
+      destinationCity: string;
+      expectedDeliveryDate: string;
+      deliveredDate: string;
+      receiverName: string;
+      lastUpdated: string;
+      trackingTimeline: TrackingEvent[];
+    }
+  ): Promise<void>;
+}
