@@ -520,8 +520,10 @@ export const notionProvider: DataProvider = {
 
     let orders = results.map((page) => parseOrder(page));
 
-    // Client-side filter: hide "RTO Received" (can't filter in Notion until option exists)
+    // Client-side filter: exclude terminal statuses from active orders
     orders = orders.filter((o) => o.deliveryStatus !== "RTO Received");
+    orders = orders.filter((o) => o.deliveryStatus !== "Return Initiated");
+    orders = orders.filter((o) => o.deliveryStatus !== "Return Complete");
 
     // Exclude test orders (#1025 and below)
     orders = orders.filter((o) => {

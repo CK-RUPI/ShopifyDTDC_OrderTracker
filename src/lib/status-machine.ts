@@ -13,7 +13,7 @@ const ALLOWED_TRANSITIONS: Record<DeliveryStatus, DeliveryStatus[]> = {
   "RTO": [],
   "RTO Confirmed": [],
   "RTO Received": [],
-  "Return Initiated": ["Return Complete", "In Transit", "RTO"],
+  "Return Initiated": [],
   "Return Complete": [],
 };
 
@@ -37,7 +37,8 @@ export function resolveStatus(
   }
 
   if (currentOrderStatus === "Return Initiated") {
-    if (dtdcMappedStatus === "Delivered") return "Return Complete";
+    // Return Complete must be set manually — never auto-transition
+    return "Return Initiated";
   }
 
   return dtdcMappedStatus;
