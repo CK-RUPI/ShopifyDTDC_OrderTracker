@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import {
   Table,
   TableBody,
@@ -435,9 +435,8 @@ export function InfluencerSection() {
                 const shipmentProducts = products[shipment.id] || [];
                 const hasPending = pendingChanges.has(shipment.id);
                 return (
-                  <>
+                  <Fragment key={shipment.id}>
                     <TableRow
-                      key={shipment.id}
                       className={`
                         border-b border-zinc-800/40 hover:bg-zinc-800/40 transition-colors cursor-pointer
                         ${isExpanded ? "bg-zinc-800/30" : ""}
@@ -794,7 +793,7 @@ export function InfluencerSection() {
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </TableBody>
