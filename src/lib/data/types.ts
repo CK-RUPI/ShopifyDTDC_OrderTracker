@@ -50,6 +50,7 @@ export interface Order {
   trackingTimeline: TrackingEvent[];
   rtoTrackingNumber: string;
   deliveryEmailSent: boolean;
+  shippingMode: "Air" | "Road" | "";
 }
 
 export interface Product {
@@ -81,6 +82,7 @@ export interface OrderFilters {
   status?: DeliveryStatus;
   search?: string;
   hideDelivered?: boolean;
+  shippingMode?: "Air" | "Road";
 }
 
 export interface DataProvider {
@@ -105,6 +107,10 @@ export interface DataProvider {
   updateCodStatus(
     orderId: string,
     status: "Pending" | "Collected"
+  ): Promise<void>;
+  updateShippingMode(
+    orderId: string,
+    mode: "Air" | "Road"
   ): Promise<void>;
   updateRtoTracking(
     orderId: string,

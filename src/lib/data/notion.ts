@@ -21,6 +21,7 @@ function headers() {
 
 let cachedDatabaseId: string | null = null;
 let cachedInfluencerDbId: string | null = null;
+let shippingModePropertyCreated = false;
 
 async function getDatabaseId(): Promise<string> {
   if (cachedDatabaseId) return cachedDatabaseId;
@@ -173,6 +174,7 @@ function parseOrder(page: Record<string, unknown>): Order {
 
   const paymentMethod = getSelect(props["Payment Method"]);
   const codStatus = getSelect(props["COD Collection Status"]);
+  const shippingModeRaw = getSelect(props["Shipping Mode"]);
   const orderTotalProp = props["Order Total"] as { number?: number | null } | undefined;
   const orderTotal = orderTotalProp?.number ?? 0;
 
@@ -203,6 +205,7 @@ function parseOrder(page: Record<string, unknown>): Order {
     trackingTimeline: timeline,
     rtoTrackingNumber: getText(props["RTO Tracking Number"]),
     deliveryEmailSent: getCheckbox(props["Delivery Email Sent"]),
+    shippingMode: (shippingModeRaw || (paymentMethod === "COD" ? "Road" : "Air")) as "Air" | "Road",
   };
 }
 
@@ -353,6 +356,11 @@ export const notionProvider: DataProvider = {
           o.trackingNumber.toLowerCase().includes(search) ||
           o.destinationCity.toLowerCase().includes(search)
       );
+    }
+
+    // Client-side filter: Shipping Mode (can't filter in Notion until property exists)
+    if (filters?.shippingMode) {
+      orders = orders.filter((o) => o.shippingMode === filters.shippingMode);
     }
 
     return orders;
@@ -593,6 +601,45 @@ export const notionProvider: DataProvider = {
         },
       }),
     });
+  },
+
+  async updateShippingMode(orderId: string, mode: "Air" | "Road"): Promise<void> {
+    // Ensure the "Shipping Mode" property exists on the database
+    if (!shippingModePropertyCreated) {
+      const databaseId = await getDatabaseId();
+      await fetch(`${NOTION_API}/databases/${databaseId}`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({
+          properties: {
+            "Shipping Mode": {
+              select: {
+                options: [
+                  { name: "Air", color: "blue" },
+                  { name: "Road", color: "orange" },
+                ],
+              },
+            },
+          },
+        }),
+      });
+      shippingModePropertyCreated = true;
+    }
+
+    const res = await fetch(`${NOTION_API}/pages/${orderId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: {
+          "Shipping Mode": { select: { name: mode } },
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`Notion updateShippingMode failed for ${orderId}: ${res.status}`, errorBody);
+      throw new Error(`Notion update failed: ${res.status}`);
+    }
   },
 
   async updateRtoTracking(orderId: string, rtoTrackingNumber: string): Promise<void> {

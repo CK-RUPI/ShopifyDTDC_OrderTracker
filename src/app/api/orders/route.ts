@@ -7,11 +7,13 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status") as DeliveryStatus | null;
     const search = searchParams.get("search") || undefined;
     const hideDelivered = searchParams.get("hideDelivered") === "true";
+    const shippingMode = searchParams.get("shippingMode") as "Air" | "Road" | null;
 
     const orders = await data.getOrders({
       status: status || undefined,
       search,
       hideDelivered,
+      shippingMode: shippingMode || undefined,
     });
 
     return NextResponse.json({ success: true, orders });

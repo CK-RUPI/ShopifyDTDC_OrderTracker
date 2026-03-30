@@ -34,6 +34,7 @@ import {
   RefreshCw,
   ArrowDownUp,
   Truck,
+  Plane,
   CircleAlert,
   CircleCheck,
   Clock,
@@ -470,6 +471,8 @@ interface SearchFilterDarkProps {
   onStatusChange: (value: string | null) => void;
   showDelivered: boolean;
   onShowDeliveredChange: (value: boolean) => void;
+  shippingModeFilter: string;
+  onShippingModeChange: (value: string | null) => void;
 }
 
 function SearchFilterDark({
@@ -479,6 +482,8 @@ function SearchFilterDark({
   onStatusChange,
   showDelivered,
   onShowDeliveredChange,
+  shippingModeFilter,
+  onShippingModeChange,
 }: SearchFilterDarkProps) {
   return (
     <div className="rounded-xl bg-zinc-900 border border-zinc-800/60 p-4">
@@ -512,6 +517,18 @@ function SearchFilterDark({
                 {s.label}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+
+        {/* Shipping mode filter */}
+        <Select value={shippingModeFilter} onValueChange={onShippingModeChange}>
+          <SelectTrigger className="w-full sm:w-36 h-9 bg-zinc-800/60 border-zinc-700/50 text-zinc-300 [&_svg]:text-zinc-500">
+            <SelectValue placeholder="All Modes" />
+          </SelectTrigger>
+          <SelectContent className="bg-zinc-900 border-zinc-700/50 text-zinc-300">
+            <SelectItem value="all" className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100">All Modes</SelectItem>
+            <SelectItem value="Air" className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100">BY AIR</SelectItem>
+            <SelectItem value="Road" className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100">BY ROAD</SelectItem>
           </SelectContent>
         </Select>
 
@@ -639,6 +656,29 @@ function PaymentBadgeDark({ method }: { method: "COD" | "Prepaid" }) {
   );
 }
 
+function ShippingModeBadgeDark({ mode }: { mode: "Air" | "Road" | "" }) {
+  if (!mode) return null;
+  const config =
+    mode === "Air"
+      ? {
+          className: "bg-sky-500/10 text-sky-400 border-sky-500/20",
+          label: "BY AIR",
+        }
+      : {
+          className: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+          label: "BY ROAD",
+        };
+
+  return (
+    <Badge
+      variant="outline"
+      className={`${config.className} text-[10px] px-1.5 py-0`}
+    >
+      {config.label}
+    </Badge>
+  );
+}
+
 // =============================================================================
 // TRACKING TIMELINE (DARK)
 // =============================================================================
@@ -743,6 +783,27 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
         body: JSON.stringify({ codCollectionStatus: newStatus }),
       });
       onOrderUpdated?.();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleShippingModeChange = async (orderId: string, mode: string | null) => {
+    if (!mode || (mode !== "Air" && mode !== "Road")) return;
+    setActionLoading(`shipping-${orderId}`);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/shipping-mode`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shippingMode: mode }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error("Shipping mode update failed:", err);
+      }
+      onOrderUpdated?.();
+    } catch (err) {
+      console.error("Shipping mode fetch error:", err);
     } finally {
       setActionLoading(null);
     }
@@ -1218,6 +1279,39 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
                             </Button>
                           )}
 
+                          {/* Shipping Mode */}
+                          <Select
+                            value={order.shippingMode}
+                            onValueChange={(v) => handleShippingModeChange(order.id, v)}
+                          >
+                            <SelectTrigger
+                              className={`w-36 h-8 text-xs font-medium ${
+                                order.shippingMode === "Air"
+                                  ? "bg-sky-500/10 border-sky-500/30 text-sky-400"
+                                  : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                              } [&_svg]:text-current`}
+                            >
+                              <div className="flex items-center gap-1.5">
+                                {actionLoading === `shipping-${order.id}` ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : order.shippingMode === "Air" ? (
+                                  <Plane className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Truck className="h-3.5 w-3.5" />
+                                )}
+                                <SelectValue />
+                              </div>
+                            </SelectTrigger>
+                            <SelectContent className="bg-zinc-900 border-zinc-700/50 text-zinc-300">
+                              <SelectItem value="Air" className="text-sky-400 focus:bg-zinc-800 focus:text-sky-300">
+                                BY AIR
+                              </SelectItem>
+                              <SelectItem value="Road" className="text-amber-400 focus:bg-zinc-800 focus:text-amber-300">
+                                BY ROAD
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+
                           {/* Initiate RTO */}
                           {order.deliveryStatus === "Undelivered" && (
                             <Button
@@ -1628,6 +1722,7 @@ export default function DashboardCommandCenter() {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [shippingModeFilter, setShippingModeFilter] = useState("all");
   const [showDelivered, setShowDelivered] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<string>("");
   const [activeTab, setActiveTab] = useState<Tab>("orders");
@@ -1672,6 +1767,8 @@ export default function DashboardCommandCenter() {
       const params = new URLSearchParams();
       if (statusFilter && statusFilter !== "all")
         params.set("status", statusFilter);
+      if (shippingModeFilter && shippingModeFilter !== "all")
+        params.set("shippingMode", shippingModeFilter);
       if (search) params.set("search", search);
       if (!showDelivered) params.set("hideDelivered", "true");
 
@@ -1685,7 +1782,7 @@ export default function DashboardCommandCenter() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, search, showDelivered]);
+  }, [statusFilter, shippingModeFilter, search, showDelivered]);
 
   useEffect(() => {
     fetchOrders();
@@ -1968,6 +2065,8 @@ export default function DashboardCommandCenter() {
                 onStatusChange={(v) => setStatusFilter(v || "all")}
                 showDelivered={showDelivered}
                 onShowDeliveredChange={setShowDelivered}
+                shippingModeFilter={shippingModeFilter}
+                onShippingModeChange={(v) => setShippingModeFilter(v || "all")}
               />
 
               {/* Delayed-only filter indicator */}
