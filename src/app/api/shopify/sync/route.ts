@@ -69,6 +69,7 @@ export async function POST() {
         rtoTrackingNumber: "",
         deliveryEmailSent: false,
         shippingMode: isCOD ? "Road" : "Air",
+        weightGrams: 0,
       });
       synced++;
     }
@@ -121,6 +122,7 @@ export async function POST() {
         rtoTrackingNumber: "",
         deliveryEmailSent: false,
         shippingMode: isCOD ? "Road" : "Air",
+        weightGrams: 0,
       });
       unfulfilled++;
     }

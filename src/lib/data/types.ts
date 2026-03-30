@@ -50,6 +50,7 @@ export interface Order {
   rtoTrackingNumber: string;
   deliveryEmailSent: boolean;
   shippingMode: "Air" | "Road" | "";
+  weightGrams: number;
 }
 
 export interface Product {
@@ -75,6 +76,19 @@ export interface InfluencerShipment {
   trackingTimeline: TrackingEvent[];
   createdAt: string;
   products?: Product[];
+}
+
+export interface ShippingRateSlab {
+  minGrams: number;
+  maxGrams: number; // use Infinity for the last slab
+  rate: number;
+}
+
+export interface ShippingRateTable {
+  codAir: ShippingRateSlab[];
+  codRoad: ShippingRateSlab[];
+  prepaidAir: ShippingRateSlab[];
+  prepaidRoad: ShippingRateSlab[];
 }
 
 export interface OrderFilters {
@@ -111,6 +125,7 @@ export interface DataProvider {
     orderId: string,
     mode: "Air" | "Road"
   ): Promise<void>;
+  updateOrderWeight(orderId: string, weightGrams: number): Promise<void>;
   updateRtoTracking(
     orderId: string,
     rtoTrackingNumber: string
