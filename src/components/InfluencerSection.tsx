@@ -24,6 +24,7 @@ import {
   Package,
   X,
   Save,
+  Activity,
 } from "lucide-react";
 
 // Dark-themed status badge matching the orders table
@@ -126,6 +127,7 @@ export function InfluencerSection() {
   const [productForm, setProductForm] = useState<ProductFormState>(emptyForm);
   const [savingProducts, setSavingProducts] = useState<string | null>(null);
   const [pendingChanges, setPendingChanges] = useState<Set<string>>(new Set());
+  const [timelineOpen, setTimelineOpen] = useState<Set<string>>(new Set());
 
   const fetchShipments = useCallback(async () => {
     try {
@@ -489,7 +491,7 @@ export function InfluencerSection() {
                       >
                         <TableCell
                           colSpan={4}
-                          className="bg-zinc-900/80 border-b border-zinc-800/40 p-0"
+                          className="bg-zinc-900/80 border-b border-zinc-800/40 p-0 whitespace-normal"
                         >
                           <div className="px-6 py-5 border-l-2 border-l-blue-500/30">
                             <div className="flex gap-8 text-sm mb-3">
@@ -516,12 +518,41 @@ export function InfluencerSection() {
                                 </div>
                               )}
                             </div>
-                            <TrackingTimeline
-                              events={shipment.trackingTimeline}
-                            />
+                            {/* Courier Journey Toggle */}
+                            <div className="border-t border-zinc-800 pt-3 mt-2">
+                              <button
+                                className="flex items-center gap-2 text-xs font-medium text-zinc-500 uppercase tracking-wider hover:text-zinc-300 transition-colors w-full"
+                                onClick={() =>
+                                  setTimelineOpen((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(shipment.id)) next.delete(shipment.id);
+                                    else next.add(shipment.id);
+                                    return next;
+                                  })
+                                }
+                              >
+                                <Activity className="h-3.5 w-3.5" />
+                                Courier Journey
+                                {shipment.trackingTimeline?.length > 0 && (
+                                  <span className="text-zinc-600">
+                                    ({shipment.trackingTimeline.length} events)
+                                  </span>
+                                )}
+                                {timelineOpen.has(shipment.id) ? (
+                                  <ChevronDown className="h-3.5 w-3.5 ml-auto" />
+                                ) : (
+                                  <ChevronRight className="h-3.5 w-3.5 ml-auto" />
+                                )}
+                              </button>
+                              {timelineOpen.has(shipment.id) && (
+                                <TrackingTimeline
+                                  events={shipment.trackingTimeline}
+                                />
+                              )}
+                            </div>
 
                             {/* Products Section */}
-                            <div className="mt-4 border-t border-zinc-800 pt-4">
+                            <div className="border-t border-zinc-800 pt-4 mt-3">
                               <div className="flex items-center justify-between mb-3">
                                 <h4 className="text-sm font-medium text-zinc-300">
                                   Products

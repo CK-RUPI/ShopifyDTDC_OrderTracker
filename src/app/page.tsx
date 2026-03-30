@@ -702,6 +702,7 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [rtoInput, setRtoInput] = useState<Record<string, string>>({});
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [timelineOpen, setTimelineOpen] = useState<Set<string>>(new Set());
 
   if (orders.length === 0) {
     return (
@@ -964,7 +965,7 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
                   >
                     <TableCell
                       colSpan={6}
-                      className="bg-zinc-900/80 border-b border-zinc-800/40 p-0"
+                      className="bg-zinc-900/80 border-b border-zinc-800/40 p-0 whitespace-normal"
                     >
                       <div className="px-6 py-5 border-l-2 border-l-blue-500/30">
                         {/* Info grid */}
@@ -1284,15 +1285,37 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
                           </div>
                         )}
 
-                        {/* Tracking timeline */}
-                        <div className="border-t border-zinc-800/60 pt-4 mt-2">
-                          <h4 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        {/* Courier Journey Toggle */}
+                        <div className="border-t border-zinc-800/60 pt-3 mt-2">
+                          <button
+                            className="flex items-center gap-2 text-xs font-medium text-zinc-500 uppercase tracking-wider hover:text-zinc-300 transition-colors w-full"
+                            onClick={() =>
+                              setTimelineOpen((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(order.id)) next.delete(order.id);
+                                else next.add(order.id);
+                                return next;
+                              })
+                            }
+                          >
                             <Activity className="h-3.5 w-3.5" />
-                            Tracking Timeline
-                          </h4>
-                          <TrackingTimelineDark
-                            events={order.trackingTimeline}
-                          />
+                            Courier Journey
+                            {order.trackingTimeline?.length > 0 && (
+                              <span className="text-zinc-600">
+                                ({order.trackingTimeline.length} events)
+                              </span>
+                            )}
+                            {timelineOpen.has(order.id) ? (
+                              <ChevronDown className="h-3.5 w-3.5 ml-auto" />
+                            ) : (
+                              <ChevronRight className="h-3.5 w-3.5 ml-auto" />
+                            )}
+                          </button>
+                          {timelineOpen.has(order.id) && (
+                            <TrackingTimelineDark
+                              events={order.trackingTimeline}
+                            />
+                          )}
                         </div>
                       </div>
                     </TableCell>
