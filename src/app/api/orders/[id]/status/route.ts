@@ -4,6 +4,7 @@ import { DeliveryStatus } from "@/lib/data/types";
 import { validateTransition } from "@/lib/status-machine";
 
 const VALID_STATUSES: DeliveryStatus[] = [
+  "Unfulfilled",
   "Booked",
   "Picked Up",
   "In Transit",

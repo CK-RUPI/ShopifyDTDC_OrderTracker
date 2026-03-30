@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { data } from "@/lib/data";
 import {
   getFulfilledOrders,
+  getUnfulfilledOrders,
   formatShippingAddress,
 } from "@/lib/shopify";
 
@@ -71,11 +72,63 @@ export async function POST() {
       synced++;
     }
 
+    // Phase 2: Sync unfulfilled orders
+    const unfulfilledOrders = await getUnfulfilledOrders();
+    let unfulfilled = 0;
+
+    for (const order of unfulfilledOrders) {
+      const customerName = order.customer
+        ? `${order.customer.first_name || ""} ${order.customer.last_name || ""}`.trim()
+        : "Unknown";
+
+      const gateways = (order.payment_gateway_names || []).map((g) =>
+        g.toLowerCase()
+      );
+      const isCOD =
+        order.financial_status === "pending" ||
+        gateways.some(
+          (g) =>
+            g.includes("cash on delivery") ||
+            g.includes("cod") ||
+            g.includes("payment pending")
+        );
+      const paymentMethod = isCOD ? "COD" : "Prepaid";
+
+      await data.upsertOrder({
+        shopifyOrderId: order.id.toString(),
+        orderNumber: order.name,
+        customerName,
+        customerEmail: order.email || order.customer?.email || "",
+        customerPhone: order.shipping_address?.phone || "",
+        shippingAddress: formatShippingAddress(order.shipping_address),
+        trackingNumber: "",
+        courierPartner: "",
+        paymentMethod,
+        orderTotal: parseFloat(order.total_price || "0"),
+        codCollectionStatus: isCOD ? "Pending" : "",
+        orderDate: order.created_at.split("T")[0],
+        fulfilledDate: "",
+        deliveryStatus: "Unfulfilled",
+        originCity: "",
+        destinationCity: order.shipping_address?.city || "",
+        expectedDeliveryDate: "",
+        deliveredDate: "",
+        deliveredTimestamp: "",
+        receiverName: "",
+        lastUpdated: new Date().toISOString().split("T")[0],
+        trackingTimeline: [],
+        rtoTrackingNumber: "",
+        deliveryEmailSent: false,
+      });
+      unfulfilled++;
+    }
+
     return NextResponse.json({
       success: true,
       synced,
       skipped,
-      total: shopifyOrders.length,
+      unfulfilled,
+      total: shopifyOrders.length + unfulfilledOrders.length,
     });
   } catch (error) {
     console.error("Shopify sync error:", error);

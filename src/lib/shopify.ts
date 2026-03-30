@@ -37,13 +37,18 @@ async function getAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-async function shopifyFetch(endpoint: string): Promise<unknown> {
+async function shopifyFetch(
+  endpoint: string,
+  options?: { method?: string; body?: unknown }
+): Promise<unknown> {
   const token = await getAccessToken();
   const response = await fetch(`https://${STORE_URL}/admin/api/2024-01${endpoint}`, {
+    method: options?.method || "GET",
     headers: {
       "X-Shopify-Access-Token": token,
       "Content-Type": "application/json",
     },
+    ...(options?.body ? { body: JSON.stringify(options.body) } : {}),
   });
 
   if (!response.ok) {
@@ -76,6 +81,11 @@ export interface ShopifyOrder {
     country: string;
     phone: string;
   } | null;
+  line_items: Array<{
+    id: number;
+    title: string;
+    quantity: number;
+  }>;
   fulfillments: Array<{
     id: number;
     status: string;
@@ -106,6 +116,90 @@ export async function getFulfilledOrders(): Promise<ShopifyOrder[]> {
   }
 
   return allOrders;
+}
+
+export async function getUnfulfilledOrders(): Promise<ShopifyOrder[]> {
+  const allOrders: ShopifyOrder[] = [];
+  let url = "/orders.json?fulfillment_status=unfulfilled&status=open&limit=50";
+
+  while (url) {
+    const data = (await shopifyFetch(url)) as {
+      orders: ShopifyOrder[];
+    };
+    allOrders.push(...data.orders);
+
+    if (data.orders.length === 50) {
+      const lastId = data.orders[data.orders.length - 1].id;
+      url = `/orders.json?fulfillment_status=unfulfilled&status=open&limit=50&since_id=${lastId}`;
+    } else {
+      url = "";
+    }
+  }
+
+  return allOrders;
+}
+
+export async function createShopifyFulfillment(
+  shopifyOrderId: string,
+  trackingNumber: string,
+  courierPartner: string
+): Promise<void> {
+  const foData = (await shopifyFetch(
+    `/orders/${shopifyOrderId}/fulfillment_orders.json`
+  )) as {
+    fulfillment_orders: Array<{
+      id: number;
+      status: string;
+      line_items: Array<{ id: number; quantity: number; fulfillable_quantity: number }>;
+    }>;
+  };
+
+  const fulfillmentOrders = foData.fulfillment_orders;
+  if (!fulfillmentOrders || fulfillmentOrders.length === 0) {
+    throw new Error("No fulfillment orders found for this order");
+  }
+
+  // Only include fulfillment orders that have fulfillable items
+  const lineItemsByFulfillmentOrder = fulfillmentOrders
+    .filter((fo) => fo.status === "open" || fo.status === "in_progress")
+    .map((fo) => ({
+      fulfillment_order_id: fo.id,
+      fulfillment_order_line_items: fo.line_items
+        .filter((li) => li.fulfillable_quantity > 0)
+        .map((li) => ({
+          id: li.id,
+          quantity: li.fulfillable_quantity,
+        })),
+    }))
+    .filter((fo) => fo.fulfillment_order_line_items.length > 0);
+
+  if (lineItemsByFulfillmentOrder.length === 0) {
+    const debug = fulfillmentOrders.map((fo) => ({
+      id: fo.id,
+      status: fo.status,
+      items: fo.line_items.map((li) => ({
+        id: li.id,
+        qty: li.quantity,
+        fulfillable: li.fulfillable_quantity,
+      })),
+    }));
+    throw new Error(
+      `No fulfillable items found. Fulfillment orders: ${JSON.stringify(debug)}`
+    );
+  }
+
+  await shopifyFetch("/fulfillments.json", {
+    method: "POST",
+    body: {
+      fulfillment: {
+        line_items_by_fulfillment_order: lineItemsByFulfillmentOrder,
+        tracking_info: {
+          number: trackingNumber,
+          company: courierPartner || "DTDC",
+        },
+      },
+    },
+  });
 }
 
 export function extractProductHandle(url: string): string | null {

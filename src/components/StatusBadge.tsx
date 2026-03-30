@@ -7,6 +7,10 @@ const statusConfig: Record<
   DeliveryStatus,
   { className: string; label: string }
 > = {
+  Unfulfilled: {
+    className: "bg-orange-100 text-orange-800 border-orange-300",
+    label: "Unfulfilled",
+  },
   Booked: {
     className: "bg-yellow-100 text-yellow-800 border-yellow-300",
     label: "Booked",

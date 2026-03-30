@@ -32,6 +32,10 @@ const darkStatusConfig: Record<
   DeliveryStatus,
   { className: string; label: string }
 > = {
+  Unfulfilled: {
+    className: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+    label: "Unfulfilled",
+  },
   Booked: {
     className: "bg-amber-500/10 text-amber-400 border-amber-500/20",
     label: "Booked",

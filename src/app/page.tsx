@@ -144,6 +144,7 @@ function formatDate(dateStr: string): string {
 
 const statuses: Array<{ value: string; label: string }> = [
   { value: "all", label: "All Statuses" },
+  { value: "Unfulfilled", label: "Unfulfilled" },
   { value: "Booked", label: "Booked" },
   { value: "Picked Up", label: "Picked Up" },
   { value: "In Transit", label: "In Transit" },
@@ -313,6 +314,9 @@ interface StatsCardsDarkProps {
 
 function StatsCardsDark({ orders, delayThresholdDays, onDelayedClick }: StatsCardsDarkProps) {
   const total = orders.length;
+  const unfulfilled = orders.filter(
+    (o) => o.deliveryStatus === "Unfulfilled"
+  ).length;
   const delivered = orders.filter(
     (o) => o.deliveryStatus === "Delivered"
   ).length;
@@ -357,6 +361,13 @@ function StatsCardsDark({ orders, delayThresholdDays, onDelayedClick }: StatsCar
       icon: <Package className="h-5 w-5" />,
       accentColor: "text-zinc-100",
       glowColor: "shadow-zinc-500/5",
+    },
+    {
+      title: "Unfulfilled",
+      value: unfulfilled,
+      icon: <Clock className="h-5 w-5" />,
+      accentColor: "text-yellow-400",
+      glowColor: "shadow-yellow-500/10",
     },
     {
       title: "In Transit",
@@ -531,6 +542,10 @@ const darkStatusConfig: Record<
   DeliveryStatus,
   { className: string; label: string }
 > = {
+  Unfulfilled: {
+    className: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+    label: "Unfulfilled",
+  },
   Booked: {
     className: "bg-amber-500/10 text-amber-400 border-amber-500/20",
     label: "Booked",
@@ -701,6 +716,7 @@ interface OrderTableDarkProps {
 function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTableDarkProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [rtoInput, setRtoInput] = useState<Record<string, string>>({});
+  const [trackingInputs, setTrackingInputs] = useState<Record<string, string>>({});
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [timelineOpen, setTimelineOpen] = useState<Set<string>>(new Set());
 
@@ -812,6 +828,31 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rtoTrackingNumber: trackingNum }),
       });
+      onOrderUpdated?.();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleAssignTracking = async (orderId: string) => {
+    const trackingNum = trackingInputs[orderId];
+    if (!trackingNum?.trim()) return;
+    setActionLoading(`assign-${orderId}`);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/assign-tracking`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trackingNumber: trackingNum.trim(),
+          courierPartner: "DTDC",
+        }),
+      });
+      const result = await res.json();
+      if (!result.success) {
+        alert(`Failed: ${result.error}`);
+        return;
+      }
+      setTrackingInputs((prev) => ({ ...prev, [orderId]: "" }));
       onOrderUpdated?.();
     } finally {
       setActionLoading(null);
@@ -972,7 +1013,9 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
                     <StatusBadgeDark status={order.deliveryStatus} />
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-sm text-zinc-400">
-                    {formatDate(order.fulfilledDate) || "-"}
+                    {order.deliveryStatus === "Unfulfilled"
+                      ? formatDate(order.orderDate) || "-"
+                      : formatDate(order.fulfilledDate) || "-"}
                   </TableCell>
                 </TableRow>
 
@@ -987,6 +1030,50 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
                       className="bg-blue-950/40 border-b border-zinc-800/40 p-0 whitespace-normal"
                     >
                       <div className="px-6 py-5 border-l-2 border-l-blue-500/30">
+                        {/* Assign tracking for unfulfilled orders */}
+                        {order.deliveryStatus === "Unfulfilled" && (
+                          <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-lg p-4 mb-4">
+                            <p className="text-sm font-medium text-yellow-400 mb-3 flex items-center gap-2">
+                              <Package className="h-4 w-4" />
+                              Assign Tracking Number
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                placeholder="Enter DTDC tracking number"
+                                value={trackingInputs[order.id] || ""}
+                                onChange={(e) =>
+                                  setTrackingInputs((prev) => ({
+                                    ...prev,
+                                    [order.id]: e.target.value,
+                                  }))
+                                }
+                                className="h-9 bg-zinc-800/60 border-zinc-700/50 text-zinc-200 flex-1 max-w-xs"
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                              />
+                              <Button
+                                size="sm"
+                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                                disabled={
+                                  !trackingInputs[order.id]?.trim() ||
+                                  actionLoading === `assign-${order.id}`
+                                }
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAssignTracking(order.id);
+                                }}
+                              >
+                                {actionLoading === `assign-${order.id}` ? (
+                                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                ) : (
+                                  <Truck className="h-3.5 w-3.5 mr-1.5" />
+                                )}
+                                Fulfill &amp; Track
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Info grid */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
                           <div className="flex items-center gap-2">
@@ -1627,7 +1714,7 @@ export default function DashboardCommandCenter() {
       if (data.success) {
         setMessage({
           type: "success",
-          text: `Synced ${data.synced} orders from Shopify (${data.skipped} skipped - no tracking)`,
+          text: `Synced ${data.synced} fulfilled + ${data.unfulfilled || 0} unfulfilled orders from Shopify`,
         });
         fetchOrders();
       } else {

@@ -1,4 +1,5 @@
 export type DeliveryStatus =
+  | "Unfulfilled"
   | "Booked"
   | "Picked Up"
   | "In Transit"
@@ -108,6 +109,11 @@ export interface DataProvider {
   updateRtoTracking(
     orderId: string,
     rtoTrackingNumber: string
+  ): Promise<void>;
+  assignTracking(
+    orderId: string,
+    trackingNumber: string,
+    courierPartner: string
   ): Promise<void>;
   markEmailSent(orderId: string): Promise<void>;
   getOrderById(orderId: string): Promise<Order | null>;

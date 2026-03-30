@@ -534,6 +534,34 @@ export const notionProvider: DataProvider = {
     return orders;
   },
 
+  async assignTracking(
+    orderId: string,
+    trackingNumber: string,
+    courierPartner: string
+  ): Promise<void> {
+    const today = new Date().toISOString().split("T")[0];
+    const res = await fetch(`${NOTION_API}/pages/${orderId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: {
+          "Tracking Number": {
+            rich_text: [{ text: { content: trackingNumber } }],
+          },
+          "Delivery Status": { select: { name: "Booked" } },
+          "Courier Partner": { select: { name: courierPartner || "DTDC" } },
+          "Fulfilled Date": { date: { start: today } },
+          "Last Updated": { date: { start: today } },
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`Notion assignTracking failed for ${orderId}: ${res.status}`, errorBody);
+      throw new Error(`Notion update failed: ${res.status}`);
+    }
+  },
+
   async getOrderById(orderId: string): Promise<Order | null> {
     const res = await fetch(`${NOTION_API}/pages/${orderId}`, {
       headers: headers(),
