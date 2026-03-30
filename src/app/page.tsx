@@ -732,6 +732,20 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
     }
   };
 
+  const handleInitiateRto = async (orderId: string) => {
+    setActionLoading(`initiate-rto-${orderId}`);
+    try {
+      await fetch(`/api/orders/${orderId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deliveryStatus: "RTO" }),
+      });
+      onOrderUpdated?.();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleMarkRtoConfirmed = async (orderId: string) => {
     setActionLoading(`rto-confirmed-${orderId}`);
     try {
@@ -1114,6 +1128,29 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
                               {order.codCollectionStatus === "Collected" && (
                                 <Check className="h-3.5 w-3.5 ml-1" />
                               )}
+                            </Button>
+                          )}
+
+                          {/* Initiate RTO */}
+                          {order.deliveryStatus === "Undelivered" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10 bg-transparent"
+                              disabled={
+                                actionLoading === `initiate-rto-${order.id}`
+                              }
+                              onClick={() =>
+                                handleInitiateRto(order.id)
+                              }
+                            >
+                              {actionLoading ===
+                              `initiate-rto-${order.id}` ? (
+                                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                              ) : (
+                                <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                              )}
+                              Initiate RTO
                             </Button>
                           )}
 
