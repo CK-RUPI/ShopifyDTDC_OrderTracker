@@ -884,7 +884,7 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
                 <TableRow
                   className={`
                     border-b border-zinc-800/40 hover:bg-zinc-800/40 transition-colors cursor-pointer
-                    ${delayed ? "bg-red-950/20 border-l-2 border-l-red-500/60" : ""}
+
                     ${isExpanded ? "bg-zinc-800/30" : ""}
                   `}
                   onClick={() =>
@@ -933,6 +933,11 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
                           {order.customerName}
                         </span>
                         <PaymentBadgeDark method={order.paymentMethod} />
+                        {delayed && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-red-500/15 text-red-400 border border-red-500/30">
+                            Delayed
+                          </span>
+                        )}
                       </div>
                       {order.customerPhone && (
                         <a
@@ -965,7 +970,7 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
                   >
                     <TableCell
                       colSpan={6}
-                      className="bg-zinc-900/80 border-b border-zinc-800/40 p-0 whitespace-normal"
+                      className="bg-blue-950/40 border-b border-zinc-800/40 p-0 whitespace-normal"
                     >
                       <div className="px-6 py-5 border-l-2 border-l-blue-500/30">
                         {/* Info grid */}
