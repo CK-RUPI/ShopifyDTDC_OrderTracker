@@ -52,6 +52,7 @@ import {
   Bell,
   Settings,
   Hash,
+  Share2,
 } from "lucide-react";
 import {
   Dialog,
@@ -60,6 +61,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { InfluencerSection } from "@/components/InfluencerSection";
+import { DTDCExportDialog } from "@/components/DTDCExportDialog";
 import type { Order, DeliveryStatus, TrackingEvent } from "@/lib/data/types";
 
 // --- CONSTANTS ---
@@ -1715,6 +1717,7 @@ export default function DashboardCommandCenter() {
   const [delayBannerOpen, setDelayBannerOpen] = useState(true);
   const [delayDialogOpen, setDelayDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [dtdcExportOpen, setDtdcExportOpen] = useState(false);
 
   // Load threshold from localStorage
   useEffect(() => {
@@ -1910,6 +1913,17 @@ export default function DashboardCommandCenter() {
                 </Button>
               )}
 
+              {activeTab === "orders" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDtdcExportOpen(true)}
+                  className="border-zinc-700/50 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 bg-transparent"
+                >
+                  <Share2 className="h-3.5 w-3.5 mr-1.5" />
+                  Export DTDC
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -2186,6 +2200,11 @@ export default function DashboardCommandCenter() {
             </div>
           </DialogContent>
         </Dialog>
+        <DTDCExportDialog
+          open={dtdcExportOpen}
+          onOpenChange={setDtdcExportOpen}
+          orders={orders}
+        />
       </main>
     </div>
   );
