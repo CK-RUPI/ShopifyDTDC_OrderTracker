@@ -39,10 +39,6 @@ const statusConfig: Record<
     className: "bg-red-100 text-red-800 border-red-300",
     label: "Undelivered",
   },
-  Stuck: {
-    className: "bg-red-100 text-red-800 border-red-300",
-    label: "Stuck",
-  },
   RTO: {
     className: "bg-purple-100 text-purple-800 border-purple-300",
     label: "RTO",

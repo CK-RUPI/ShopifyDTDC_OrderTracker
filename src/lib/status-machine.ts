@@ -2,15 +2,14 @@ import { DeliveryStatus } from "@/lib/data/types";
 
 // Allowed automated transitions from each status
 const ALLOWED_TRANSITIONS: Record<DeliveryStatus, DeliveryStatus[]> = {
-  "Unfulfilled": ["Booked", "Picked Up", "In Transit", "At Destination", "Out for Delivery", "Delivered", "Undelivered", "Stuck", "RTO"],
-  "Booked": ["Picked Up", "In Transit", "At Destination", "Out for Delivery", "Delivered", "Undelivered", "Stuck", "RTO"],
-  "Picked Up": ["In Transit", "At Destination", "Out for Delivery", "Delivered", "Undelivered", "Stuck", "RTO"],
-  "In Transit": ["At Destination", "Out for Delivery", "Delivered", "Undelivered", "Stuck", "RTO"],
-  "At Destination": ["Out for Delivery", "Delivered", "Undelivered", "Stuck", "RTO"],
-  "Out for Delivery": ["Delivered", "Undelivered", "Stuck", "RTO"],
+  "Unfulfilled": ["Booked", "Picked Up", "In Transit", "At Destination", "Out for Delivery", "Delivered", "Undelivered", "RTO"],
+  "Booked": ["Picked Up", "In Transit", "At Destination", "Out for Delivery", "Delivered", "Undelivered", "RTO"],
+  "Picked Up": ["In Transit", "At Destination", "Out for Delivery", "Delivered", "Undelivered", "RTO"],
+  "In Transit": ["At Destination", "Out for Delivery", "Delivered", "Undelivered", "RTO"],
+  "At Destination": ["Out for Delivery", "Delivered", "Undelivered", "RTO"],
+  "Out for Delivery": ["Delivered", "Undelivered", "RTO"],
   "Delivered": [],
-  "Undelivered": ["Out for Delivery", "In Transit", "At Destination", "Delivered", "Stuck", "RTO"],
-  "Stuck": ["In Transit", "At Destination", "Out for Delivery", "Delivered", "Undelivered", "RTO"],
+  "Undelivered": ["Out for Delivery", "In Transit", "At Destination", "Delivered", "RTO"],
   "RTO": [],
   "RTO Confirmed": [],
   "RTO Received": [],

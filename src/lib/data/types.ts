@@ -7,7 +7,6 @@ export type DeliveryStatus =
   | "Out for Delivery"
   | "Delivered"
   | "Undelivered"
-  | "Stuck"
   | "RTO"
   | "RTO Confirmed"
   | "RTO Received"

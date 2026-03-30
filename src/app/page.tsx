@@ -153,7 +153,6 @@ const statuses: Array<{ value: string; label: string }> = [
   { value: "Out for Delivery", label: "Out for Delivery" },
   { value: "Delivered", label: "Delivered" },
   { value: "Undelivered", label: "Undelivered" },
-  { value: "Stuck", label: "Stuck" },
   { value: "RTO", label: "RTO" },
   { value: "RTO Confirmed", label: "RTO Confirmed" },
   { value: "RTO Received", label: "RTO Received" },
@@ -327,7 +326,6 @@ function StatsCardsDark({ orders, delayThresholdDays, onDelayedClick }: StatsCar
       o.deliveryStatus === "At Destination" ||
       o.deliveryStatus === "Out for Delivery"
   ).length;
-  const stuck = orders.filter((o) => o.deliveryStatus === "Stuck").length;
   const booked = orders.filter(
     (o) => o.deliveryStatus === "Booked" || o.deliveryStatus === "Picked Up"
   ).length;
@@ -390,13 +388,6 @@ function StatsCardsDark({ orders, delayThresholdDays, onDelayedClick }: StatsCar
       icon: <Clock className="h-5 w-5" />,
       accentColor: "text-amber-400",
       glowColor: "shadow-amber-500/10",
-    },
-    {
-      title: "Stuck",
-      value: stuck,
-      icon: <CircleAlert className="h-5 w-5" />,
-      accentColor: "text-red-400",
-      glowColor: "shadow-red-500/10",
     },
     {
       title: "Delayed",
@@ -590,10 +581,6 @@ const darkStatusConfig: Record<
   Undelivered: {
     className: "bg-red-500/10 text-red-400 border-red-500/20",
     label: "Undelivered",
-  },
-  Stuck: {
-    className: "bg-red-500/10 text-red-400 border-red-500/20",
-    label: "Stuck",
   },
   RTO: {
     className: "bg-purple-500/10 text-purple-400 border-purple-500/20",
@@ -1562,7 +1549,6 @@ function AnalyticsSectionDark({ orders }: { orders: Order[] }) {
     (o) => o.deliveryStatus === "Delivered"
   ).length;
   const deliveryRate = total > 0 ? ((delivered / total) * 100).toFixed(1) : "0";
-  const stuck = orders.filter((o) => o.deliveryStatus === "Stuck").length;
   const rto = orders.filter(
     (o) => o.deliveryStatus === "RTO" || o.deliveryStatus === "RTO Confirmed" || o.deliveryStatus === "RTO Received"
   ).length;
@@ -1609,13 +1595,6 @@ function AnalyticsSectionDark({ orders }: { orders: Order[] }) {
           <div className="text-xs text-zinc-600 mt-1">
             {rto} returns to origin
           </div>
-        </div>
-        <div className="rounded-xl bg-zinc-900 border border-zinc-800/60 p-5">
-          <span className="text-xs text-zinc-500 uppercase tracking-wider">
-            Stuck Orders
-          </span>
-          <div className="text-3xl font-bold text-red-400 mt-2">{stuck}</div>
-          <div className="text-xs text-zinc-600 mt-1">Require attention</div>
         </div>
         <div className="rounded-xl bg-zinc-900 border border-zinc-800/60 p-5">
           <span className="text-xs text-zinc-500 uppercase tracking-wider">

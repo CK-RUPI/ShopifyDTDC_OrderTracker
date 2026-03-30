@@ -64,10 +64,6 @@ const darkStatusConfig: Record<
     className: "bg-red-500/10 text-red-400 border-red-500/20",
     label: "Undelivered",
   },
-  Stuck: {
-    className: "bg-red-500/10 text-red-400 border-red-500/20",
-    label: "Stuck",
-  },
   RTO: {
     className: "bg-purple-500/10 text-purple-400 border-purple-500/20",
     label: "RTO",
