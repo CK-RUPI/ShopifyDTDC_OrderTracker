@@ -53,6 +53,8 @@ import {
   Settings,
   Hash,
   Share2,
+  Star,
+  MessageCircle,
 } from "lucide-react";
 import {
   Dialog,
@@ -929,6 +931,33 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
     }
   };
 
+  const handleSendReviewEmail = async (orderId: string) => {
+    setActionLoading(`review-${orderId}`);
+    try {
+      const res = await fetch("/api/email/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        alert(`Review email failed: ${data.error}`);
+        return;
+      }
+      alert("Review email sent!");
+      onOrderUpdated?.();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleWhatsAppReview = (order: Order) => {
+    let phone = order.customerPhone.replace(/\D/g, "");
+    if (phone.length === 10) phone = `91${phone}`;
+    const message = `Hi ${order.customerName}! Thank you for shopping with Urban Naari. We hope you're loving your order (${order.orderNumber}). We'd really appreciate it if you could share your experience with us — it helps other shoppers too! Leave a review here: https://urbannaari.co.in\n\nThank you! 💕\n— Team Urban Naari`;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank");
+  };
+
   const handleRefreshOrder = async (orderId: string) => {
     setActionLoading(`refresh-${orderId}`);
     try {
@@ -1446,6 +1475,60 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
                               Delivery email sent
                             </span>
                           )}
+
+                          {/* Review email */}
+                          {order.deliveryStatus === "Delivered" &&
+                            order.reviewEmailSent && (
+                              <span className="text-xs text-emerald-500 flex items-center gap-1.5 px-2 py-1">
+                                <Check className="h-3.5 w-3.5" />
+                                Review email sent
+                              </span>
+                            )}
+                          {order.deliveryStatus === "Delivered" &&
+                            !order.reviewEmailSent &&
+                            order.deliveredTimestamp &&
+                            (() => {
+                              const elapsed = Date.now() - new Date(order.deliveredTimestamp).getTime();
+                              const threeDays = 3 * 24 * 60 * 60 * 1000;
+                              if (elapsed >= threeDays) {
+                                return (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="border-zinc-700/50 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                                      disabled={actionLoading === `review-${order.id}`}
+                                      onClick={() => handleSendReviewEmail(order.id)}
+                                    >
+                                      {actionLoading === `review-${order.id}` ? (
+                                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                      ) : (
+                                        <Star className="h-3.5 w-3.5 mr-1.5" />
+                                      )}
+                                      Send Review Email
+                                    </Button>
+                                    {order.customerPhone && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="border-zinc-700/50 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                                        onClick={() => handleWhatsAppReview(order)}
+                                      >
+                                        <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
+                                        WhatsApp Review
+                                      </Button>
+                                    )}
+                                  </>
+                                );
+                              }
+                              const daysLeft = Math.ceil((threeDays - elapsed) / (24 * 60 * 60 * 1000));
+                              return (
+                                <span className="text-xs text-zinc-500 flex items-center gap-1.5 px-2 py-1">
+                                  <Clock className="h-3.5 w-3.5" />
+                                  Review email in {daysLeft}d
+                                </span>
+                              );
+                            })()}
                         </div>
 
                         {/* RTO tracking input */}
@@ -1829,6 +1912,46 @@ export default function DashboardCommandCenter() {
     }
   };
 
+  const [sendingReviews, setSendingReviews] = useState(false);
+
+  const pendingReviewCount = useMemo(() => {
+    const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000;
+    return orders.filter(
+      (o) =>
+        o.deliveryStatus === "Delivered" &&
+        !o.reviewEmailSent &&
+        o.customerEmail &&
+        o.deliveredTimestamp &&
+        new Date(o.deliveredTimestamp).getTime() <= threeDaysAgo
+    ).length;
+  }, [orders]);
+
+  const handleBulkReviewEmails = async () => {
+    setSendingReviews(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/email/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bulk: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({
+          type: "success",
+          text: `Sent ${data.sent} review email${data.sent === 1 ? "" : "s"}${data.failed ? ` (${data.failed} failed)` : ""}`,
+        });
+        fetchOrders();
+      } else {
+        setMessage({ type: "error", text: data.error || "Failed to send review emails" });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to send review emails" });
+    } finally {
+      setSendingReviews(false);
+    }
+  };
+
   // Auto-dismiss message after 8 seconds
   useEffect(() => {
     if (message) {
@@ -1913,6 +2036,24 @@ export default function DashboardCommandCenter() {
                 </Button>
               )}
 
+              {activeTab === "orders" && pendingReviewCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBulkReviewEmails}
+                  disabled={sendingReviews}
+                  className="border-zinc-700/50 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 bg-transparent"
+                >
+                  {sendingReviews ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Star className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  {sendingReviews
+                    ? "Sending..."
+                    : `Review Emails (${pendingReviewCount})`}
+                </Button>
+              )}
               {activeTab === "orders" && (
                 <Button
                   variant="outline"

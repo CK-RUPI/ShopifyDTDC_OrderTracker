@@ -49,6 +49,7 @@ export interface Order {
   trackingTimeline: TrackingEvent[];
   rtoTrackingNumber: string;
   deliveryEmailSent: boolean;
+  reviewEmailSent: boolean;
   shippingMode: "Air" | "Road" | "";
 }
 
@@ -121,6 +122,7 @@ export interface DataProvider {
     courierPartner: string
   ): Promise<void>;
   markEmailSent(orderId: string): Promise<void>;
+  markReviewEmailSent(orderId: string): Promise<void>;
   getOrderById(orderId: string): Promise<Order | null>;
   // Influencer shipments
   getInfluencerShipments(): Promise<InfluencerShipment[]>;

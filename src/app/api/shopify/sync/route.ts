@@ -68,6 +68,7 @@ export async function POST() {
         trackingTimeline: [],
         rtoTrackingNumber: "",
         deliveryEmailSent: false,
+        reviewEmailSent: false,
         shippingMode: isCOD ? "Road" : "Air",
       });
       synced++;
@@ -120,6 +121,7 @@ export async function POST() {
         trackingTimeline: [],
         rtoTrackingNumber: "",
         deliveryEmailSent: false,
+        reviewEmailSent: false,
         shippingMode: isCOD ? "Road" : "Air",
       });
       unfulfilled++;
