@@ -22,6 +22,7 @@ function headers() {
 let cachedDatabaseId: string | null = null;
 let cachedInfluencerDbId: string | null = null;
 let shippingModePropertyCreated = false;
+let reviewEmailPropertyCreated = false;
 let weightPropertyCreated = false;
 
 async function getDatabaseId(): Promise<string> {
@@ -208,6 +209,7 @@ function parseOrder(page: Record<string, unknown>): Order {
     trackingTimeline: timeline,
     rtoTrackingNumber: getText(props["RTO Tracking Number"]),
     deliveryEmailSent: getCheckbox(props["Delivery Email Sent"]),
+    reviewEmailSent: getCheckbox(props["Review Email Sent"]),
     shippingMode: (shippingModeRaw || (paymentMethod === "COD" ? "Road" : "Air")) as "Air" | "Road",
     weightGrams,
   };
@@ -698,6 +700,32 @@ export const notionProvider: DataProvider = {
       body: JSON.stringify({
         properties: {
           "Delivery Email Sent": { checkbox: true },
+        },
+      }),
+    });
+  },
+
+  async markReviewEmailSent(orderId: string): Promise<void> {
+    if (!reviewEmailPropertyCreated) {
+      const databaseId = await getDatabaseId();
+      await fetch(`${NOTION_API}/databases/${databaseId}`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({
+          properties: {
+            "Review Email Sent": { checkbox: {} },
+          },
+        }),
+      });
+      reviewEmailPropertyCreated = true;
+    }
+
+    await fetch(`${NOTION_API}/pages/${orderId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: {
+          "Review Email Sent": { checkbox: true },
         },
       }),
     });

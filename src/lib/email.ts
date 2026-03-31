@@ -147,3 +147,119 @@ export async function sendDeliveryEmail(order: Order): Promise<void> {
   const html = buildDeliveryEmailHtml(order);
   await sendEmail(order.customerEmail, subject, html);
 }
+
+export function buildReviewEmailHtml(order: Order): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light only" />
+  <meta name="supported-color-schemes" content="light only" />
+  <style>
+    :root { color-scheme: light only; }
+    [data-ogsc] body, [data-ogsb] body { background-color: #F2F2F2 !important; }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #F2F2F2; font-family: 'Helvetica Neue', Arial, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #F2F2F2; padding: 40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.08);">
+
+        <!-- Header -->
+        <tr>
+          <td style="background-color: #ffffff; padding: 28px 40px; text-align: center; border-bottom: 1px solid #FFE5E6;">
+            <img src="https://urbannaari.co.in/cdn/shop/files/logo_2.png?v=1772107246&width=330" alt="Urban Naari" width="180" style="display: block; margin: 0 auto; border-radius: 8px;" />
+          </td>
+        </tr>
+
+        <!-- Headline -->
+        <tr>
+          <td style="padding: 40px 40px 16px; text-align: center;">
+            <h2 style="margin: 0 0 8px; color: #1F1F1F; font-size: 24px; font-weight: 600;">How's your new look?</h2>
+            <p style="margin: 0; color: #999; font-size: 14px;">Order ${order.orderNumber}</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding: 8px 40px 28px;">
+            <p style="color: #1F1F1F; font-size: 15px; line-height: 1.7; text-align: center;">
+              Hi ${order.customerName},<br/>
+              It's been a few days since your order arrived — we hope you're absolutely loving it! Your feedback means the world to us and helps other shoppers find their perfect look too.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Review CTA -->
+        <tr>
+          <td style="padding: 8px 40px 32px; text-align: center;">
+            <p style="margin: 0 0 16px; color: #1F1F1F; font-size: 15px;">Would you take a moment to share your experience?</p>
+            <a href="https://urbannaari.co.in" style="display: inline-block; background-color: #FF5A5F; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 14px; font-weight: 600; letter-spacing: 0.5px;">Leave a Review</a>
+          </td>
+        </tr>
+
+        <!-- Divider -->
+        <tr>
+          <td style="padding: 0 40px;">
+            <hr style="border: none; border-top: 1px solid #FFE5E6; margin: 0;" />
+          </td>
+        </tr>
+
+        <!-- Instagram CTA -->
+        <tr>
+          <td style="padding: 24px 40px 28px; text-align: center;">
+            <p style="margin: 0 0 12px; color: #1F1F1F; font-size: 15px;">Show off your style on Instagram!</p>
+            <a href="https://www.instagram.com/urbannaari.co.in/" style="display: inline-block; background-color: transparent; color: #FF5A5F; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 14px; font-weight: 600; border: 2px solid #FF5A5F;">Tag @urbannaari</a>
+            <p style="margin: 12px 0 0; color: #aaa; font-size: 12px;">We feature our favourites!</p>
+          </td>
+        </tr>
+
+        <!-- Divider -->
+        <tr>
+          <td style="padding: 0 40px;">
+            <hr style="border: none; border-top: 1px solid #FFE5E6; margin: 0;" />
+          </td>
+        </tr>
+
+        <!-- Help line -->
+        <tr>
+          <td style="padding: 24px 40px; text-align: center;">
+            <p style="margin: 0; color: #555; font-size: 14px; line-height: 1.6;">
+              Something not right? <strong>We'll fix it.</strong><br/>
+              Just reply to this email or write to us at
+              <a href="mailto:care@urbannaari.co.in" style="color: #FF5A5F; text-decoration: underline;">care@urbannaari.co.in</a>
+            </p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background-color: #FF5A5F; padding: 28px 40px; text-align: center;">
+            <p style="margin: 0 0 12px; color: #ffffff; font-size: 14px;">Thank you for choosing Urban Naari</p>
+            <a href="https://www.instagram.com/urbannaari.co.in/" style="color: #FFE5E6; font-size: 12px; text-decoration: none;">Instagram</a>
+            <span style="color: #FFE5E6; margin: 0 8px;">&#183;</span>
+            <a href="https://urbannaari.co.in" style="color: #FFE5E6; font-size: 12px; text-decoration: none;">urbannaari.co.in</a>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+export async function sendReviewEmail(order: Order): Promise<void> {
+  const subject = `How are you loving your Urban Naari order?`;
+  const html = buildReviewEmailHtml(order);
+  await sendEmail(order.customerEmail, subject, html);
+}
+
+export function buildReviewWhatsAppUrl(order: Order): string {
+  let phone = order.customerPhone.replace(/\D/g, "");
+  if (phone.length === 10) phone = `91${phone}`;
+  const message = `Hi ${order.customerName}! Thank you for shopping with Urban Naari. We hope you're loving your order (${order.orderNumber}). We'd really appreciate it if you could share your experience with us — it helps other shoppers too! Leave a review here: https://urbannaari.co.in\n\nThank you! 💕\n— Team Urban Naari`;
+  return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+}
