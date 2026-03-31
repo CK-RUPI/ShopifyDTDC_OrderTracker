@@ -1823,7 +1823,7 @@ export default function DashboardCommandCenter() {
   const [delayThresholdDays, setDelayThresholdDays] = useState(DEFAULT_DELAYED_THRESHOLD_DAYS);
   const [thresholdInput, setThresholdInput] = useState("");
   const [showDelayedOnly, setShowDelayedOnly] = useState(false);
-  const [delayBannerOpen, setDelayBannerOpen] = useState(true);
+  const [delayBannerOpen, setDelayBannerOpen] = useState(false);
   const [delayDialogOpen, setDelayDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [dtdcExportOpen, setDtdcExportOpen] = useState(false);
