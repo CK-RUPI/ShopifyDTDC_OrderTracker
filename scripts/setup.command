@@ -12,35 +12,35 @@ echo "  Urban Naari Order Tracker - Setup"
 echo "============================================"
 echo
 
-# --- Install Homebrew if missing ---
-if ! command -v brew &> /dev/null; then
-    echo "[INSTALLING] Homebrew not found. Installing..."
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+# --- Load nvm if installed (needed for .command files which skip shell profile) ---
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-    # Add Homebrew to PATH for Apple Silicon Macs
-    if [ -f "/opt/homebrew/bin/brew" ]; then
-        eval "$(/opt/homebrew/bin/brew shellenv)"
-    elif [ -f "/usr/local/bin/brew" ]; then
-        eval "$(/usr/local/bin/brew shellenv)"
-    fi
-
-    if ! command -v brew &> /dev/null; then
-        echo "[ERROR] Homebrew installation failed. Please install manually:"
-        echo "  https://brew.sh"
-        echo
-        read -p "Press Enter to exit..."
-        exit 1
-    fi
-    echo "[OK] Homebrew installed."
-else
-    echo "[OK] Homebrew found."
+# --- Also check Homebrew paths ---
+if [ -f "/opt/homebrew/bin/brew" ]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [ -f "/usr/local/bin/brew" ]; then
+    eval "$(/usr/local/bin/brew shellenv)"
 fi
 
 # --- Install Node.js if missing ---
 if ! command -v node &> /dev/null; then
-    echo
-    echo "[INSTALLING] Node.js not found. Installing via Homebrew..."
-    brew install node
+    echo "[INSTALLING] Node.js not found. Installing via nvm..."
+    # Install nvm if not present
+    if [ ! -s "$NVM_DIR/nvm.sh" ]; then
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+    fi
+    if command -v nvm &> /dev/null; then
+        nvm install --lts
+    else
+        echo "[ERROR] nvm installation failed. Install Node.js manually:"
+        echo "  https://nodejs.org"
+        echo
+        read -p "Press Enter to exit..."
+        exit 1
+    fi
     if ! command -v node &> /dev/null; then
         echo "[ERROR] Node.js installation failed."
         echo

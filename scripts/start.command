@@ -2,6 +2,17 @@
 # Navigate to project root
 cd "$(dirname "$0")/.."
 
+# --- Load nvm if installed (needed for .command files which skip shell profile) ---
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+# --- Also check Homebrew paths ---
+if [ -f "/opt/homebrew/bin/brew" ]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [ -f "/usr/local/bin/brew" ]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+fi
+
 echo "============================================"
 echo "  Urban Naari Order Tracker - Starting..."
 echo "============================================"
