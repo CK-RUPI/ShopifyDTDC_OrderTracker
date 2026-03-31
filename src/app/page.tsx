@@ -55,6 +55,7 @@ import {
   Share2,
   Star,
   MessageCircle,
+  Download,
 } from "lucide-react";
 import {
   Dialog,
@@ -64,7 +65,11 @@ import {
 } from "@/components/ui/dialog";
 import { InfluencerSection } from "@/components/InfluencerSection";
 import { DTDCExportDialog } from "@/components/DTDCExportDialog";
-import type { Order, DeliveryStatus, TrackingEvent } from "@/lib/data/types";
+import { ShippingExportDialog } from "@/components/ShippingExportDialog";
+import { ShippingRatesPanel } from "@/components/ShippingSettingsDialog";
+import { WeightInput } from "@/components/WeightInput";
+import { getShippingConfig, calculateShippingCharge } from "@/lib/shipping";
+import type { Order, DeliveryStatus, TrackingEvent, ShippingRateTable } from "@/lib/data/types";
 
 // --- CONSTANTS ---
 const AUTO_REFRESH_INTERVAL = 30 * 60 * 1000; // 30 minutes
@@ -742,9 +747,10 @@ interface OrderTableDarkProps {
   orders: Order[];
   onOrderUpdated?: () => void;
   delayThresholdDays: number;
+  shippingConfig: ShippingRateTable;
 }
 
-function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTableDarkProps) {
+function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays, shippingConfig }: OrderTableDarkProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [rtoInput, setRtoInput] = useState<Record<string, string>>({});
   const [trackingInputs, setTrackingInputs] = useState<Record<string, string>>({});
@@ -777,6 +783,13 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const handleWeightSaved = (orderId: string, weight: number) => {
+    // Update the order in local state optimistically
+    const orderEl = orders.find((o) => o.id === orderId);
+    if (orderEl) orderEl.weightGrams = weight;
+    onOrderUpdated?.();
   };
 
   const handleShippingModeChange = async (orderId: string, mode: string | null) => {
@@ -1330,6 +1343,19 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays }: OrderTab
                             </SelectContent>
                           </Select>
 
+                          {/* Weight + Shipping Charge */}
+                          <WeightInput
+                            orderId={order.id}
+                            initialWeight={order.weightGrams}
+                            shippingCharge={calculateShippingCharge(
+                              order.weightGrams,
+                              order.paymentMethod,
+                              order.shippingMode,
+                              shippingConfig
+                            )}
+                            onWeightSaved={handleWeightSaved}
+                          />
+
                           {/* Initiate RTO */}
                           {order.deliveryStatus === "Undelivered" && (
                             <Button
@@ -1801,6 +1827,9 @@ export default function DashboardCommandCenter() {
   const [delayDialogOpen, setDelayDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [dtdcExportOpen, setDtdcExportOpen] = useState(false);
+  const [shippingExportOpen, setShippingExportOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<"alerts" | "shipping">("alerts");
+  const [shippingConfig, setShippingConfig] = useState<ShippingRateTable>(() => getShippingConfig());
 
   // Load threshold from localStorage
   useEffect(() => {
@@ -2058,11 +2087,22 @@ export default function DashboardCommandCenter() {
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={() => setShippingExportOpen(true)}
+                  className="border-zinc-700/50 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 bg-transparent"
+                >
+                  <Download className="h-3.5 w-3.5 mr-1.5" />
+                  Export Invoice
+                </Button>
+              )}
+              {activeTab === "orders" && (
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setDtdcExportOpen(true)}
                   className="border-zinc-700/50 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 bg-transparent"
                 >
                   <Share2 className="h-3.5 w-3.5 mr-1.5" />
-                  Export DTDC
+                  Follow Ups
                 </Button>
               )}
               <Button
@@ -2230,6 +2270,7 @@ export default function DashboardCommandCenter() {
                   orders={showDelayedOnly ? delayedOrders : orders}
                   onOrderUpdated={fetchOrders}
                   delayThresholdDays={delayThresholdDays}
+                  shippingConfig={shippingConfig}
                 />
               )}
             </>
@@ -2300,51 +2341,92 @@ export default function DashboardCommandCenter() {
 
         {/* Settings dialog */}
         <Dialog open={settingsDialogOpen} onOpenChange={(open) => {
-          if (!open) setThresholdInput(String(delayThresholdDays));
+          if (!open) {
+            setThresholdInput(String(delayThresholdDays));
+            setSettingsTab("alerts");
+          }
           setSettingsDialogOpen(open);
         }}>
-          <DialogContent className="bg-zinc-900 border-zinc-800 text-zinc-100 max-w-sm">
+          <DialogContent className="bg-zinc-900 border-zinc-800 text-zinc-100 max-w-xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-zinc-100">
                 <Settings className="h-5 w-5 text-zinc-400" />
-                Alert Settings
+                Settings
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 mt-2">
-              <div>
-                <label className="text-sm text-zinc-400 block mb-2">
-                  Mark orders as delayed after
-                </label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={1}
-                    max={60}
-                    value={thresholdInput}
-                    onChange={(e) => setThresholdInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSaveThreshold()}
-                    className="w-24 h-9 bg-zinc-800/60 border-zinc-700/50 text-zinc-200 text-center"
-                  />
-                  <span className="text-sm text-zinc-500">days in transit</span>
-                </div>
-                <p className="text-xs text-zinc-600 mt-2">
-                  Currently set to {delayThresholdDays} day{delayThresholdDays !== 1 ? "s" : ""}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                className="bg-blue-600 hover:bg-blue-700 text-white w-full"
-                onClick={handleSaveThreshold}
+
+            {/* Settings tabs */}
+            <div className="flex gap-1 bg-zinc-800/40 rounded-lg p-1">
+              <button
+                onClick={() => setSettingsTab("alerts")}
+                className={`flex-1 text-xs font-medium px-3 py-1.5 rounded-md transition-all ${
+                  settingsTab === "alerts"
+                    ? "bg-zinc-700 text-zinc-100 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
               >
-                Save
-              </Button>
+                Alerts
+              </button>
+              <button
+                onClick={() => setSettingsTab("shipping")}
+                className={`flex-1 text-xs font-medium px-3 py-1.5 rounded-md transition-all ${
+                  settingsTab === "shipping"
+                    ? "bg-zinc-700 text-zinc-100 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                Shipping Rates
+              </button>
             </div>
+
+            {settingsTab === "alerts" ? (
+              <div className="space-y-4 mt-1">
+                <div>
+                  <label className="text-sm text-zinc-400 block mb-2">
+                    Mark orders as delayed after
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={thresholdInput}
+                      onChange={(e) => setThresholdInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSaveThreshold()}
+                      className="w-24 h-9 bg-zinc-800/60 border-zinc-700/50 text-zinc-200 text-center"
+                    />
+                    <span className="text-sm text-zinc-500">days in transit</span>
+                  </div>
+                  <p className="text-xs text-zinc-600 mt-2">
+                    Currently set to {delayThresholdDays} day{delayThresholdDays !== 1 ? "s" : ""}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700 text-white w-full"
+                  onClick={handleSaveThreshold}
+                >
+                  Save
+                </Button>
+              </div>
+            ) : (
+              <ShippingRatesPanel
+                visible={settingsTab === "shipping"}
+                onConfigSaved={() => setShippingConfig(getShippingConfig())}
+              />
+            )}
           </DialogContent>
         </Dialog>
         <DTDCExportDialog
           open={dtdcExportOpen}
           onOpenChange={setDtdcExportOpen}
           orders={orders}
+        />
+        <ShippingExportDialog
+          open={shippingExportOpen}
+          onOpenChange={setShippingExportOpen}
+          orders={orders}
+          shippingConfig={shippingConfig}
         />
       </main>
     </div>

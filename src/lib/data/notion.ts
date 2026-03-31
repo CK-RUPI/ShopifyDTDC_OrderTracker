@@ -23,6 +23,7 @@ let cachedDatabaseId: string | null = null;
 let cachedInfluencerDbId: string | null = null;
 let shippingModePropertyCreated = false;
 let reviewEmailPropertyCreated = false;
+let weightPropertyCreated = false;
 
 async function getDatabaseId(): Promise<string> {
   if (cachedDatabaseId) return cachedDatabaseId;
@@ -178,6 +179,8 @@ function parseOrder(page: Record<string, unknown>): Order {
   const shippingModeRaw = getSelect(props["Shipping Mode"]);
   const orderTotalProp = props["Order Total"] as { number?: number | null } | undefined;
   const orderTotal = orderTotalProp?.number ?? 0;
+  const weightProp = props["Weight (g)"] as { number?: number | null } | undefined;
+  const weightGrams = weightProp?.number ?? 0;
 
   return {
     id: (page as { id: string }).id,
@@ -208,6 +211,7 @@ function parseOrder(page: Record<string, unknown>): Order {
     deliveryEmailSent: getCheckbox(props["Delivery Email Sent"]),
     reviewEmailSent: getCheckbox(props["Review Email Sent"]),
     shippingMode: (shippingModeRaw || (paymentMethod === "COD" ? "Road" : "Air")) as "Air" | "Road",
+    weightGrams,
   };
 }
 
@@ -640,6 +644,37 @@ export const notionProvider: DataProvider = {
     if (!res.ok) {
       const errorBody = await res.text();
       console.error(`Notion updateShippingMode failed for ${orderId}: ${res.status}`, errorBody);
+      throw new Error(`Notion update failed: ${res.status}`);
+    }
+  },
+
+  async updateOrderWeight(orderId: string, weightGrams: number): Promise<void> {
+    if (!weightPropertyCreated) {
+      const databaseId = await getDatabaseId();
+      await fetch(`${NOTION_API}/databases/${databaseId}`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({
+          properties: {
+            "Weight (g)": { number: {} },
+          },
+        }),
+      });
+      weightPropertyCreated = true;
+    }
+
+    const res = await fetch(`${NOTION_API}/pages/${orderId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: {
+          "Weight (g)": { number: weightGrams },
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`Notion updateOrderWeight failed for ${orderId}: ${res.status}`, errorBody);
       throw new Error(`Notion update failed: ${res.status}`);
     }
   },
