@@ -215,6 +215,37 @@ function parseOrder(page: Record<string, unknown>): Order {
   };
 }
 
+let influencerDbMigrated = false;
+async function ensureInfluencerDbProperties(databaseId: string) {
+  if (influencerDbMigrated) return;
+  try {
+    await fetch(`${NOTION_API}/databases/${databaseId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: {
+          "Phone Number": { rich_text: {} },
+          "Instagram Handle": { rich_text: {} },
+          "Jaipur Influencer": { checkbox: {} },
+          "Products": { rich_text: {} },
+          "Courier Partner": {
+            select: {
+              options: [
+                { name: "DTDC", color: "blue" },
+                { name: "Hand Delivery", color: "green" },
+              ],
+            },
+          },
+        },
+      }),
+    });
+    influencerDbMigrated = true;
+  } catch {
+    // Properties may already exist, that's fine
+    influencerDbMigrated = true;
+  }
+}
+
 function parseInfluencerShipment(page: Record<string, unknown>): InfluencerShipment {
   const props = page.properties as Record<string, unknown>;
 
@@ -258,6 +289,11 @@ function parseInfluencerShipment(page: Record<string, unknown>): InfluencerShipm
     }
   }
 
+  const getCheckbox = (prop: unknown): boolean => {
+    const p = prop as { checkbox?: boolean };
+    return p?.checkbox ?? false;
+  };
+
   return {
     id: (page as { id: string }).id,
     label: getTitle(props["Label"]),
@@ -273,6 +309,9 @@ function parseInfluencerShipment(page: Record<string, unknown>): InfluencerShipm
     trackingTimeline: timeline,
     createdAt: getDate(props["Created At"]),
     products,
+    phoneNumber: getText(props["Phone Number"]),
+    instagramHandle: getText(props["Instagram Handle"]),
+    isJaipurInfluencer: getCheckbox(props["Jaipur Influencer"]),
   };
 }
 
@@ -743,29 +782,63 @@ export const notionProvider: DataProvider = {
   async createInfluencerShipment(shipment: {
     label: string;
     trackingNumber: string;
+    phoneNumber: string;
+    instagramHandle?: string;
+    isJaipurInfluencer?: boolean;
   }): Promise<InfluencerShipment> {
     const databaseId = await getInfluencerDatabaseId();
     const now = new Date().toISOString().split("T")[0];
+    const isJaipur = shipment.isJaipurInfluencer ?? false;
+
+    // Ensure new properties exist in the database schema
+    await ensureInfluencerDbProperties(databaseId);
+
+    const properties: Record<string, unknown> = {
+      Label: {
+        title: [{ text: { content: shipment.label || "Untitled" } }],
+      },
+      "Phone Number": {
+        rich_text: [{ text: { content: shipment.phoneNumber || "" } }],
+      },
+      "Courier Partner": { select: { name: isJaipur ? "Hand Delivery" : "DTDC" } },
+      "Delivery Status": { select: { name: "Booked" } },
+      "Created At": { date: { start: now } },
+      "Last Updated": { date: { start: now } },
+      "Jaipur Influencer": { checkbox: isJaipur },
+    };
+
+    if (!isJaipur && shipment.trackingNumber) {
+      properties["Tracking Number"] = {
+        rich_text: [{ text: { content: shipment.trackingNumber } }],
+      };
+    }
+
+    if (isJaipur) {
+      properties["Destination City"] = {
+        rich_text: [{ text: { content: "Jaipur" } }],
+      };
+    }
+
+    if (shipment.instagramHandle) {
+      properties["Instagram Handle"] = {
+        rich_text: [{ text: { content: shipment.instagramHandle } }],
+      };
+    }
 
     const res = await fetch(`${NOTION_API}/pages`, {
       method: "POST",
       headers: headers(),
       body: JSON.stringify({
         parent: { database_id: databaseId },
-        properties: {
-          Label: {
-            title: [{ text: { content: shipment.label || "Untitled" } }],
-          },
-          "Tracking Number": {
-            rich_text: [{ text: { content: shipment.trackingNumber } }],
-          },
-          "Courier Partner": { select: { name: "DTDC" } },
-          "Delivery Status": { select: { name: "Booked" } },
-          "Created At": { date: { start: now } },
-          "Last Updated": { date: { start: now } },
-        },
+        properties,
       }),
     });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`Notion create influencer shipment failed: ${res.status}`, errorBody);
+      throw new Error(`Notion create failed: ${res.status}`);
+    }
 
     const data = await res.json();
     return parseInfluencerShipment(data);
@@ -838,5 +911,25 @@ export const notionProvider: DataProvider = {
       headers: headers(),
       body: JSON.stringify({ properties }),
     });
+  },
+
+  async markInfluencerDelivered(shipmentId: string): Promise<void> {
+    const now = new Date().toISOString().split("T")[0];
+    const res = await fetch(`${NOTION_API}/pages/${shipmentId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: {
+          "Delivery Status": { select: { name: "Delivered" } },
+          "Delivered Date": { date: { start: now } },
+          "Last Updated": { date: { start: now } },
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`Failed to mark delivered: ${res.status}`, errorBody);
+      throw new Error(`Notion update failed: ${res.status}`);
+    }
   },
 };

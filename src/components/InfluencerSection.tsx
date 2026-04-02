@@ -23,8 +23,11 @@ import {
   Trash2,
   Package,
   X,
-  Save,
   Activity,
+  CheckCircle2,
+  MapPin,
+  Phone,
+  AtSign,
 } from "lucide-react";
 
 // Dark-themed status badge matching the orders table
@@ -114,6 +117,9 @@ export function InfluencerSection() {
   const [showAdd, setShowAdd] = useState(false);
   const [newTracking, setNewTracking] = useState("");
   const [newLabel, setNewLabel] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newInstagram, setNewInstagram] = useState("");
+  const [isJaipurInfluencer, setIsJaipurInfluencer] = useState(false);
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
@@ -126,7 +132,6 @@ export function InfluencerSection() {
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [productForm, setProductForm] = useState<ProductFormState>(emptyForm);
   const [savingProducts, setSavingProducts] = useState<string | null>(null);
-  const [pendingChanges, setPendingChanges] = useState<Set<string>>(new Set());
   const [timelineOpen, setTimelineOpen] = useState<Set<string>>(new Set());
 
   const fetchShipments = useCallback(async () => {
@@ -177,7 +182,8 @@ export function InfluencerSection() {
   };
 
   const handleAdd = async () => {
-    if (!newTracking) return;
+    if (!isJaipurInfluencer && !newTracking) return;
+    if (!newPhone) return;
     setAdding(true);
     setMessage(null);
     try {
@@ -187,14 +193,28 @@ export function InfluencerSection() {
         body: JSON.stringify({
           trackingNumber: newTracking,
           label: newLabel || "Untitled",
+          phoneNumber: newPhone,
+          instagramHandle: newInstagram || undefined,
+          isJaipurInfluencer,
         }),
       });
       const data = await res.json();
       if (data.success) {
+        const createdId = data.shipment?.id;
         setNewTracking("");
         setNewLabel("");
+        setNewPhone("");
+        setNewInstagram("");
+        setIsJaipurInfluencer(false);
         setShowAdd(false);
-        fetchShipments();
+        await fetchShipments();
+        // Auto-expand the new shipment and open product form
+        if (createdId) {
+          setExpandedId(createdId);
+          setShowProductForm(createdId);
+          setEditingProductId(null);
+          setProductForm(emptyForm);
+        }
       } else {
         setMessage({ type: "error", text: data.error || "Failed to add" });
       }
@@ -242,6 +262,25 @@ export function InfluencerSection() {
     }
   };
 
+  const autoSaveProducts = async (shipmentId: string, updatedProducts: Product[]) => {
+    setSavingProducts(shipmentId);
+    try {
+      const res = await fetch(`/api/influencer/${shipmentId}/products`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ products: updatedProducts }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setMessage({ type: "error", text: data.error || "Failed to save products" });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to save products" });
+    } finally {
+      setSavingProducts(null);
+    }
+  };
+
   const handleAddProduct = (shipmentId: string) => {
     if (!productForm.name || !productForm.url) return;
     const newProduct: Product = {
@@ -252,44 +291,38 @@ export function InfluencerSection() {
       productUrl: productForm.url,
     };
 
-    setProducts((prev) => ({
-      ...prev,
-      [shipmentId]: [...(prev[shipmentId] || []), newProduct],
-    }));
-    setPendingChanges((prev) => new Set(prev).add(shipmentId));
+    const updated = [...(products[shipmentId] || []), newProduct];
+    setProducts((prev) => ({ ...prev, [shipmentId]: updated }));
     setProductForm(emptyForm);
     setShowProductForm(null);
+    autoSaveProducts(shipmentId, updated);
   };
 
   const handleEditProduct = (shipmentId: string) => {
     if (!productForm.name || !productForm.url || !editingProductId) return;
 
-    setProducts((prev) => ({
-      ...prev,
-      [shipmentId]: (prev[shipmentId] || []).map((p) =>
-        p.id === editingProductId
-          ? {
-              ...p,
-              name: productForm.name,
-              imageUrl: productForm.imageUrl,
-              size: productForm.size,
-              productUrl: productForm.url,
-            }
-          : p
-      ),
-    }));
-    setPendingChanges((prev) => new Set(prev).add(shipmentId));
+    const updated = (products[shipmentId] || []).map((p) =>
+      p.id === editingProductId
+        ? {
+            ...p,
+            name: productForm.name,
+            imageUrl: productForm.imageUrl,
+            size: productForm.size,
+            productUrl: productForm.url,
+          }
+        : p
+    );
+    setProducts((prev) => ({ ...prev, [shipmentId]: updated }));
     setProductForm(emptyForm);
     setEditingProductId(null);
     setShowProductForm(null);
+    autoSaveProducts(shipmentId, updated);
   };
 
   const handleRemoveProduct = (shipmentId: string, productId: string) => {
-    setProducts((prev) => ({
-      ...prev,
-      [shipmentId]: (prev[shipmentId] || []).filter((p) => p.id !== productId),
-    }));
-    setPendingChanges((prev) => new Set(prev).add(shipmentId));
+    const updated = (products[shipmentId] || []).filter((p) => p.id !== productId);
+    setProducts((prev) => ({ ...prev, [shipmentId]: updated }));
+    autoSaveProducts(shipmentId, updated);
   };
 
   const startEditProduct = (shipmentId: string, product: Product) => {
@@ -306,32 +339,21 @@ export function InfluencerSection() {
     });
   };
 
-  const handleSaveProducts = async (shipmentId: string) => {
-    setSavingProducts(shipmentId);
+  const handleMarkDelivered = async (shipmentId: string) => {
+    setMessage(null);
     try {
-      const res = await fetch(`/api/influencer/${shipmentId}/products`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ products: products[shipmentId] || [] }),
+      const res = await fetch(`/api/influencer/${shipmentId}/mark-delivered`, {
+        method: "POST",
       });
       const data = await res.json();
       if (data.success) {
-        setPendingChanges((prev) => {
-          const next = new Set(prev);
-          next.delete(shipmentId);
-          return next;
-        });
-        setMessage({ type: "success", text: "Products saved" });
+        setMessage({ type: "success", text: "Marked as delivered" });
+        fetchShipments();
       } else {
-        setMessage({
-          type: "error",
-          text: data.error || "Failed to save products",
-        });
+        setMessage({ type: "error", text: data.error || "Failed to mark delivered" });
       }
     } catch {
-      setMessage({ type: "error", text: "Failed to save products" });
-    } finally {
-      setSavingProducts(null);
+      setMessage({ type: "error", text: "Failed to mark delivered" });
     }
   };
 
@@ -364,29 +386,70 @@ export function InfluencerSection() {
 
       {/* Add form */}
       {showAdd && (
-        <div className="flex gap-2 mb-4 items-center p-3 bg-zinc-900 rounded-md border border-zinc-800">
-          <Input
-            placeholder="Tracking Number *"
-            value={newTracking}
-            onChange={(e) => setNewTracking(e.target.value)}
-            className="w-56"
-          />
-          <Input
-            placeholder="Label (optional)"
-            value={newLabel}
-            onChange={(e) => setNewLabel(e.target.value)}
-            className="w-48"
-          />
-          <Button
-            size="sm"
-            onClick={handleAdd}
-            disabled={!newTracking || adding}
-          >
-            {adding ? "Adding..." : "Add"}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setShowAdd(false)}>
-            Cancel
-          </Button>
+        <div className="mb-4 p-4 bg-zinc-900 rounded-md border border-zinc-800 space-y-3">
+          {/* Jaipur toggle */}
+          <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+            <div
+              className={`relative w-9 h-5 rounded-full transition-colors ${isJaipurInfluencer ? "bg-blue-600" : "bg-zinc-700"}`}
+              onClick={() => {
+                setIsJaipurInfluencer(!isJaipurInfluencer);
+                if (!isJaipurInfluencer) setNewTracking("");
+              }}
+            >
+              <div
+                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${isJaipurInfluencer ? "translate-x-4" : ""}`}
+              />
+            </div>
+            <MapPin className="h-3.5 w-3.5 text-zinc-400" />
+            <span className="text-zinc-300">Jaipur Influencer</span>
+            {isJaipurInfluencer && (
+              <span className="text-xs text-blue-400">(hand delivery, no tracking)</span>
+            )}
+          </label>
+          <div className="flex gap-2 flex-wrap items-center">
+            <Input
+              placeholder="Label / Name *"
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              className="w-48"
+            />
+            <Input
+              placeholder="Phone Number *"
+              value={newPhone}
+              onChange={(e) => setNewPhone(e.target.value)}
+              className="w-44"
+            />
+            {!isJaipurInfluencer && (
+              <Input
+                placeholder="Tracking Number *"
+                value={newTracking}
+                onChange={(e) => setNewTracking(e.target.value)}
+                className="w-52"
+              />
+            )}
+            <Input
+              placeholder="Instagram (optional)"
+              value={newInstagram}
+              onChange={(e) => setNewInstagram(e.target.value)}
+              className="w-44"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={handleAdd}
+              disabled={
+                adding ||
+                !newPhone ||
+                (!isJaipurInfluencer && !newTracking)
+              }
+            >
+              {adding ? "Adding..." : "Add Shipment"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => { setShowAdd(false); setIsJaipurInfluencer(false); }}>
+              Cancel
+            </Button>
+          </div>
         </div>
       )}
 
@@ -433,7 +496,6 @@ export function InfluencerSection() {
               {shipments.map((shipment) => {
                 const isExpanded = expandedId === shipment.id;
                 const shipmentProducts = products[shipment.id] || [];
-                const hasPending = pendingChanges.has(shipment.id);
                 return (
                   <Fragment key={shipment.id}>
                     <TableRow
@@ -493,7 +555,7 @@ export function InfluencerSection() {
                           className="bg-zinc-900/80 border-b border-zinc-800/40 p-0 whitespace-normal"
                         >
                           <div className="px-6 py-5 border-l-2 border-l-blue-500/30">
-                            <div className="flex gap-8 text-sm mb-3">
+                            <div className="flex gap-8 text-sm mb-3 flex-wrap">
                               <div>
                                 <span className="text-zinc-500">From:</span>{" "}
                                 <span className="font-medium text-zinc-200">
@@ -506,6 +568,22 @@ export function InfluencerSection() {
                                   {shipment.destinationCity || "-"}
                                 </span>
                               </div>
+                              {shipment.phoneNumber && (
+                                <div className="flex items-center gap-1">
+                                  <Phone className="h-3 w-3 text-zinc-500" />
+                                  <span className="font-medium text-zinc-200">
+                                    {shipment.phoneNumber}
+                                  </span>
+                                </div>
+                              )}
+                              {shipment.instagramHandle && (
+                                <div className="flex items-center gap-1">
+                                  <AtSign className="h-3 w-3 text-zinc-500" />
+                                  <span className="font-medium text-zinc-200">
+                                    {shipment.instagramHandle}
+                                  </span>
+                                </div>
+                              )}
                               {shipment.receiverName && (
                                 <div>
                                   <span className="text-zinc-500">
@@ -516,7 +594,30 @@ export function InfluencerSection() {
                                   </span>
                                 </div>
                               )}
+                              {shipment.isJaipurInfluencer && (
+                                <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[11px]">
+                                  <MapPin className="h-3 w-3 mr-1" />
+                                  Jaipur
+                                </Badge>
+                              )}
                             </div>
+                            {/* Mark Delivered for Jaipur influencers */}
+                            {shipment.isJaipurInfluencer && shipment.deliveryStatus !== "Delivered" && (
+                              <div className="mb-3">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleMarkDelivered(shipment.id);
+                                  }}
+                                >
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  Mark Delivered
+                                </Button>
+                              </div>
+                            )}
                             {/* Courier Journey Toggle */}
                             <div className="border-t border-zinc-800 pt-3 mt-2">
                               <button
@@ -555,25 +656,11 @@ export function InfluencerSection() {
                               <div className="flex items-center justify-between mb-3">
                                 <h4 className="text-sm font-medium text-zinc-300">
                                   Products
+                                  {savingProducts === shipment.id && (
+                                    <span className="ml-2 text-xs text-zinc-500">Saving...</span>
+                                  )}
                                 </h4>
                                 <div className="flex gap-2">
-                                  {hasPending && (
-                                    <Button
-                                      size="sm"
-                                      onClick={() =>
-                                        handleSaveProducts(shipment.id)
-                                      }
-                                      disabled={
-                                        savingProducts === shipment.id
-                                      }
-                                      className="h-7 text-xs"
-                                    >
-                                      <Save className="h-3 w-3 mr-1" />
-                                      {savingProducts === shipment.id
-                                        ? "Saving..."
-                                        : "Save"}
-                                    </Button>
-                                  )}
                                   {showProductForm !== shipment.id && (
                                     <Button
                                       size="sm"
@@ -673,6 +760,11 @@ export function InfluencerSection() {
                                           error: "",
                                         }))
                                       }
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter" && productForm.url && !productForm.lookingUp) {
+                                          handleProductLookup();
+                                        }
+                                      }}
                                       className="flex-1"
                                     />
                                     <Button

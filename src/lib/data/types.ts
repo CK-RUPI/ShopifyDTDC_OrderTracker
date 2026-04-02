@@ -77,6 +77,9 @@ export interface InfluencerShipment {
   trackingTimeline: TrackingEvent[];
   createdAt: string;
   products?: Product[];
+  phoneNumber: string;
+  instagramHandle: string;
+  isJaipurInfluencer: boolean;
 }
 
 export interface ShippingRateSlab {
@@ -144,6 +147,9 @@ export interface DataProvider {
   createInfluencerShipment(shipment: {
     label: string;
     trackingNumber: string;
+    phoneNumber: string;
+    instagramHandle?: string;
+    isJaipurInfluencer?: boolean;
   }): Promise<InfluencerShipment>;
   getActiveInfluencerShipments(): Promise<InfluencerShipment[]>;
   updateInfluencerTracking(
@@ -159,4 +165,5 @@ export interface DataProvider {
       trackingTimeline: TrackingEvent[];
     }
   ): Promise<void>;
+  markInfluencerDelivered(shipmentId: string): Promise<void>;
 }

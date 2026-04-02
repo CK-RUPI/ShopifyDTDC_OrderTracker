@@ -20,18 +20,28 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { trackingNumber, label } = body;
+    const { trackingNumber, label, phoneNumber, instagramHandle, isJaipurInfluencer } = body;
 
-    if (!trackingNumber) {
+    if (!isJaipurInfluencer && !trackingNumber) {
       return NextResponse.json(
         { success: false, error: "Tracking number is required" },
         { status: 400 }
       );
     }
 
+    if (!phoneNumber) {
+      return NextResponse.json(
+        { success: false, error: "Phone number is required" },
+        { status: 400 }
+      );
+    }
+
     const shipment = await data.createInfluencerShipment({
       label: label || "Untitled",
-      trackingNumber,
+      trackingNumber: trackingNumber || "",
+      phoneNumber,
+      instagramHandle,
+      isJaipurInfluencer,
     });
 
     return NextResponse.json({ success: true, shipment });
