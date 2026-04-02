@@ -426,9 +426,10 @@ export const notionProvider: DataProvider = {
 
     if (existing.length > 0) {
       const pageId = (existing[0] as { id: string }).id;
-      // Don't overwrite delivery status and tracking data on re-sync
+      // Don't overwrite delivery status, COD collection status, and tracking data on re-sync
       const updateProps = { ...properties };
       delete updateProps["Delivery Status"];
+      delete updateProps["COD Collection Status"];
       const res = await fetch(`${NOTION_API}/pages/${pageId}`, {
         method: "PATCH",
         headers: headers(),
