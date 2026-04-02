@@ -202,6 +202,25 @@ export async function createShopifyFulfillment(
   });
 }
 
+export async function getOrderLineItems(
+  shopifyOrderId: string
+): Promise<Array<{ title: string; quantity: number; variantTitle: string }>> {
+  const data = (await shopifyFetch(`/orders/${shopifyOrderId}.json`)) as {
+    order: {
+      line_items: Array<{
+        title: string;
+        quantity: number;
+        variant_title: string | null;
+      }>;
+    };
+  };
+  return data.order.line_items.map((li) => ({
+    title: li.title,
+    quantity: li.quantity,
+    variantTitle: li.variant_title || "",
+  }));
+}
+
 export function extractProductHandle(url: string): string | null {
   try {
     const parsed = new URL(url.startsWith("http") ? url : `https://${url}`);

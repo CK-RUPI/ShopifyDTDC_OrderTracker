@@ -964,11 +964,80 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays, shippingCo
     }
   };
 
+  const handleWhatsAppConfirmation = async (order: Order) => {
+    setActionLoading(`wa-confirm-${order.id}`);
+    try {
+      let phone = order.customerPhone.replace(/\D/g, "");
+      if (phone.length === 10) phone = `91${phone}`;
+      const firstName = order.customerName.split(" ")[0];
+
+      // Fetch line items from Shopify
+      let itemsText = "";
+      try {
+        const res = await fetch(`/api/orders/${order.id}/line-items`);
+        if (res.ok) {
+          const { lineItems } = await res.json();
+          itemsText = lineItems
+            .map((li: { title: string; quantity: number; variantTitle: string }) => {
+              const size = li.variantTitle ? ` (${li.variantTitle})` : "";
+              return `- ${li.title}${size} x ${li.quantity}`;
+            })
+            .join("\n");
+        } else {
+          console.error("Line items fetch failed:", res.status, await res.text());
+        }
+      } catch (err) {
+        console.error("Line items fetch error:", err);
+      }
+
+      // Generate emojis from code points to avoid file encoding issues
+      const E = {
+        wave: String.fromCodePoint(0x1F44B),
+        bag: String.fromCodePoint(0x1F6CD, 0xFE0F),
+        pin: String.fromCodePoint(0x1F4CD),
+        check: String.fromCodePoint(0x2705),
+        heart: String.fromCodePoint(0x1F49C),
+        hanger: String.fromCodePoint(0x1F45A),
+      };
+
+      const message = `Hi ${firstName}! ${E.wave}
+
+Thank you for your order from *UrbanNaari*! ${E.bag}
+
+Before we ship, we'd love to quickly confirm a couple of details:
+
+${E.hanger} *Items Ordered:*
+${itemsText || "(could not load items)"}
+
+${E.pin} *Delivery Address:*
+${order.shippingAddress}
+
+Please confirm:
+${E.check} Are the items and sizes correct?
+${E.check} Is the delivery address correct?
+
+Just reply *"Yes"* if everything looks good, or let us know the changes needed.
+
+Thank you! ${E.heart}
+-- Team UrbanNaari`;
+      const url = new URL(`https://web.whatsapp.com/send`);
+      url.searchParams.set("phone", phone);
+      url.searchParams.set("text", message);
+      window.open(url.toString(), "_blank");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleWhatsAppReview = (order: Order) => {
     let phone = order.customerPhone.replace(/\D/g, "");
     if (phone.length === 10) phone = `91${phone}`;
-    const message = `Hi ${order.customerName}! Thank you for shopping with Urban Naari. We hope you're loving your order (${order.orderNumber}). We'd really appreciate it if you could share your experience with us — it helps other shoppers too! Leave a review here: https://urbannaari.co.in\n\nThank you! 💕\n— Team Urban Naari`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank");
+    const heart = String.fromCodePoint(0x1F49C);
+    const message = `Hi ${order.customerName}! Thank you for shopping with UrbanNaari. We hope you're loving your order (${order.orderNumber}). We'd really appreciate it if you could share your experience with us — it helps other shoppers too! Leave a review here: https://urbannaari.co.in\n\nThank you! ${heart}\n— Team UrbanNaari`;
+    const url = new URL(`https://web.whatsapp.com/send`);
+    url.searchParams.set("phone", phone);
+    url.searchParams.set("text", message);
+    window.open(url.toString(), "_blank");
   };
 
   const handleRefreshOrder = async (orderId: string) => {
@@ -1162,6 +1231,25 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays, shippingCo
                                 )}
                                 Fulfill &amp; Track
                               </Button>
+                              {order.customerPhone && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-green-700/50 text-green-400 hover:bg-green-900/30 bg-transparent"
+                                  disabled={actionLoading === `wa-confirm-${order.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleWhatsAppConfirmation(order);
+                                  }}
+                                >
+                                  {actionLoading === `wa-confirm-${order.id}` ? (
+                                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                  ) : (
+                                    <svg className="h-3.5 w-3.5 mr-1.5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                  )}
+                                  Confirm on WhatsApp
+                                </Button>
+                              )}
                             </div>
                           </div>
                         )}
