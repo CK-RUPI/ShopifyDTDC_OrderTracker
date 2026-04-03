@@ -117,7 +117,8 @@ export interface DataProvider {
       receiverName: string;
       lastUpdated: string;
       trackingTimeline: TrackingEvent[];
-    }
+    },
+    pageId?: string
   ): Promise<void>;
   getActiveOrders(): Promise<Order[]>;
   updateDeliveryStatus(orderId: string, status: DeliveryStatus): Promise<void>;

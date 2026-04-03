@@ -57,7 +57,7 @@ export async function POST() {
               receiverName: result.receiverName,
               lastUpdated: new Date().toISOString().split("T")[0],
               trackingTimeline: result.timeline,
-            });
+            }, order.id);
             refreshed++;
             results.push({
               trackingNumber: order.trackingNumber,
@@ -81,8 +81,6 @@ export async function POST() {
         });
       }
 
-      // Delay between orders to respect DTDC + Notion API rate limits
-      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
     return NextResponse.json({

@@ -502,18 +502,20 @@ export const notionProvider: DataProvider = {
       receiverName: string;
       lastUpdated: string;
       trackingTimeline: TrackingEvent[];
-    }
+    },
+    knownPageId?: string
   ): Promise<void> {
-    const databaseId = await getDatabaseId();
+    let pageId = knownPageId;
 
-    const existing = await queryDatabase(databaseId, {
-      property: "Tracking Number",
-      rich_text: { equals: trackingNumber },
-    });
-
-    if (existing.length === 0) return;
-
-    const pageId = (existing[0] as { id: string }).id;
+    if (!pageId) {
+      const databaseId = await getDatabaseId();
+      const existing = await queryDatabase(databaseId, {
+        property: "Tracking Number",
+        rich_text: { equals: trackingNumber },
+      });
+      if (existing.length === 0) return;
+      pageId = (existing[0] as { id: string }).id;
+    }
     const timelineStr = JSON.stringify(data.trackingTimeline);
 
     const properties: Record<string, unknown> = {
@@ -568,16 +570,12 @@ export const notionProvider: DataProvider = {
     const results = await queryDatabase(databaseId, {
       and: [
         { property: "Delivery Status", select: { does_not_equal: "Delivered" } },
-        { property: "Delivery Status", select: { does_not_equal: "RTO" } },
+        { property: "Delivery Status", select: { does_not_equal: "RTO Received" } },
+        { property: "Delivery Status", select: { does_not_equal: "Return Complete" } },
       ],
     });
 
     let orders = results.map((page) => parseOrder(page));
-
-    // Client-side filter: exclude terminal statuses from active orders
-    orders = orders.filter((o) => o.deliveryStatus !== "RTO Received");
-    orders = orders.filter((o) => o.deliveryStatus !== "Return Initiated");
-    orders = orders.filter((o) => o.deliveryStatus !== "Return Complete");
 
     // Exclude test orders (#1025 and below)
     orders = orders.filter((o) => {

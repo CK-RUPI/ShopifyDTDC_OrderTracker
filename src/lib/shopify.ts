@@ -96,9 +96,10 @@ export interface ShopifyOrder {
   }>;
 }
 
-export async function getFulfilledOrders(): Promise<ShopifyOrder[]> {
+export async function getFulfilledOrders(updatedAtMin?: string): Promise<ShopifyOrder[]> {
   const allOrders: ShopifyOrder[] = [];
-  let url = "/orders.json?fulfillment_status=shipped&status=any&limit=50";
+  const dateFilter = updatedAtMin ? `&updated_at_min=${updatedAtMin}` : "";
+  let url = `/orders.json?fulfillment_status=shipped&status=any&limit=50${dateFilter}`;
 
   while (url) {
     const data = (await shopifyFetch(url)) as {
@@ -109,7 +110,7 @@ export async function getFulfilledOrders(): Promise<ShopifyOrder[]> {
     // Simple pagination — if we got 50, there might be more
     if (data.orders.length === 50) {
       const lastId = data.orders[data.orders.length - 1].id;
-      url = `/orders.json?fulfillment_status=shipped&status=any&limit=50&since_id=${lastId}`;
+      url = `/orders.json?fulfillment_status=shipped&status=any&limit=50${dateFilter}&since_id=${lastId}`;
     } else {
       url = "";
     }
@@ -118,9 +119,10 @@ export async function getFulfilledOrders(): Promise<ShopifyOrder[]> {
   return allOrders;
 }
 
-export async function getUnfulfilledOrders(): Promise<ShopifyOrder[]> {
+export async function getUnfulfilledOrders(updatedAtMin?: string): Promise<ShopifyOrder[]> {
   const allOrders: ShopifyOrder[] = [];
-  let url = "/orders.json?fulfillment_status=unfulfilled&status=open&limit=50";
+  const dateFilter = updatedAtMin ? `&updated_at_min=${updatedAtMin}` : "";
+  let url = `/orders.json?fulfillment_status=unfulfilled&status=open&limit=50${dateFilter}`;
 
   while (url) {
     const data = (await shopifyFetch(url)) as {
@@ -130,7 +132,7 @@ export async function getUnfulfilledOrders(): Promise<ShopifyOrder[]> {
 
     if (data.orders.length === 50) {
       const lastId = data.orders[data.orders.length - 1].id;
-      url = `/orders.json?fulfillment_status=unfulfilled&status=open&limit=50&since_id=${lastId}`;
+      url = `/orders.json?fulfillment_status=unfulfilled&status=open&limit=50${dateFilter}&since_id=${lastId}`;
     } else {
       url = "";
     }

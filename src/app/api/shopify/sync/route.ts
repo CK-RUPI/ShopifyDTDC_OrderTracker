@@ -8,7 +8,9 @@ import {
 
 export async function POST() {
   try {
-    const shopifyOrders = await getFulfilledOrders();
+    // Only sync orders updated in the last 7 days
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const shopifyOrders = await getFulfilledOrders(sevenDaysAgo);
     let synced = 0;
     let skipped = 0;
 
@@ -76,7 +78,7 @@ export async function POST() {
     }
 
     // Phase 2: Sync unfulfilled orders
-    const unfulfilledOrders = await getUnfulfilledOrders();
+    const unfulfilledOrders = await getUnfulfilledOrders(sevenDaysAgo);
     let unfulfilled = 0;
 
     for (const order of unfulfilledOrders) {
