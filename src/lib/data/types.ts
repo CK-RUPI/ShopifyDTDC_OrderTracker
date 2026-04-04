@@ -11,7 +11,10 @@ export type DeliveryStatus =
   | "RTO Confirmed"
   | "RTO Received"
   | "Return Initiated"
-  | "Return Complete";
+  | "Return Complete"
+  | "Video Received"
+  | "Product Received Back"
+  | "Completed";
 
 export type EmailType = "delivery_confirmation" | "review_request";
 
@@ -60,6 +63,7 @@ export interface Product {
   imageUrl: string;
   size: string;
   productUrl: string;
+  received?: boolean;
 }
 
 export interface InfluencerShipment {

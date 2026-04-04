@@ -618,7 +618,11 @@ export const notionProvider: DataProvider = {
     const res = await fetch(`${NOTION_API}/pages/${orderId}`, {
       headers: headers(),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`getOrderById failed for ${orderId}: ${res.status}`, errorBody);
+      return null;
+    }
     const page = await res.json();
     return parseOrder(page);
   },
@@ -931,3 +935,25 @@ export const notionProvider: DataProvider = {
     }
   },
 };
+
+export async function updateInfluencerStatus(
+  shipmentId: string,
+  status: string
+): Promise<void> {
+  const now = new Date().toISOString().split("T")[0];
+  const res = await fetch(`${NOTION_API}/pages/${shipmentId}`, {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify({
+      properties: {
+        "Delivery Status": { select: { name: status } },
+        "Last Updated": { date: { start: now } },
+      },
+    }),
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    console.error(`Failed to update influencer status: ${res.status}`, errorBody);
+    throw new Error(`Notion update failed: ${res.status}`);
+  }
+}

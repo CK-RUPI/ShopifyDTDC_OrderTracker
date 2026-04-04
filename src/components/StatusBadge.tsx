@@ -59,6 +59,18 @@ const statusConfig: Record<
     className: "bg-teal-100 text-teal-800 border-teal-300",
     label: "Return Complete",
   },
+  "Video Received": {
+    className: "bg-indigo-100 text-indigo-800 border-indigo-300",
+    label: "Video Received",
+  },
+  "Product Received Back": {
+    className: "bg-cyan-100 text-cyan-800 border-cyan-300",
+    label: "Product Received Back",
+  },
+  Completed: {
+    className: "bg-zinc-100 text-zinc-800 border-zinc-300",
+    label: "Completed",
+  },
 };
 
 export function StatusBadge({ status }: { status: DeliveryStatus }) {

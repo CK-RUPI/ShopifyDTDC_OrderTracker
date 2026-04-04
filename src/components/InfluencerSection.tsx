@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Fragment } from "react";
+import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import {
   Table,
   TableBody,
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { InfluencerShipment, Product, DeliveryStatus } from "@/lib/data/types";
 import { TrackingTimeline } from "./TrackingTimeline";
+import { Switch } from "@/components/ui/switch";
 import {
   ChevronDown,
   ChevronRight,
@@ -28,6 +29,10 @@ import {
   MapPin,
   Phone,
   AtSign,
+  Calendar,
+  PackageCheck,
+  Video,
+  Undo2,
 } from "lucide-react";
 
 // Dark-themed status badge matching the orders table
@@ -87,7 +92,23 @@ const darkStatusConfig: Record<
     className: "bg-teal-500/10 text-teal-400 border-teal-500/20",
     label: "Return Complete",
   },
+  "Video Received": {
+    className: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
+    label: "Video Received",
+  },
+  "Product Received Back": {
+    className: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+    label: "Product Received Back",
+  },
+  Completed: {
+    className: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
+    label: "Completed",
+  },
 };
+
+const COMPLETED_INFLUENCER_STATUSES: DeliveryStatus[] = [
+  "Completed",
+];
 
 interface ProductFormState {
   url: string;
@@ -133,6 +154,26 @@ export function InfluencerSection() {
   const [productForm, setProductForm] = useState<ProductFormState>(emptyForm);
   const [savingProducts, setSavingProducts] = useState<string | null>(null);
   const [timelineOpen, setTimelineOpen] = useState<Set<string>>(new Set());
+  const [showCompleted, setShowCompleted] = useState(false);
+
+  // Refs for auto-focus
+  const labelInputRef = useRef<HTMLInputElement>(null);
+  const productUrlInputRef = useRef<HTMLInputElement>(null);
+  const sizeInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus label input when Add Shipment form opens
+  useEffect(() => {
+    if (showAdd) {
+      setTimeout(() => labelInputRef.current?.focus(), 50);
+    }
+  }, [showAdd]);
+
+  // Auto-focus product URL input when Add Product form opens
+  useEffect(() => {
+    if (showProductForm) {
+      setTimeout(() => productUrlInputRef.current?.focus(), 50);
+    }
+  }, [showProductForm]);
 
   const fetchShipments = useCallback(async () => {
     try {
@@ -244,6 +285,7 @@ export function InfluencerSection() {
           lookupDone: true,
           error: "",
         }));
+        setTimeout(() => sizeInputRef.current?.focus(), 100);
       } else {
         setProductForm((f) => ({
           ...f,
@@ -363,6 +405,39 @@ export function InfluencerSection() {
     setProductForm(emptyForm);
   };
 
+  const handleToggleProductReceived = (shipmentId: string, productId: string) => {
+    const updated = (products[shipmentId] || []).map((p) =>
+      p.id === productId ? { ...p, received: !p.received } : p
+    );
+    setProducts((prev) => ({ ...prev, [shipmentId]: updated }));
+    autoSaveProducts(shipmentId, updated);
+  };
+
+  const handleUpdateInfluencerStatus = async (shipmentId: string, status: DeliveryStatus) => {
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/influencer/${shipmentId}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ type: "success", text: `Status updated to ${status}` });
+        fetchShipments();
+      } else {
+        setMessage({ type: "error", text: data.error || "Failed to update status" });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to update status" });
+    }
+  };
+
+  // Filter shipments: toggle OFF = active only, toggle ON = completed only
+  const filteredShipments = showCompleted
+    ? shipments.filter((s) => COMPLETED_INFLUENCER_STATUSES.includes(s.deliveryStatus))
+    : shipments.filter((s) => !COMPLETED_INFLUENCER_STATUSES.includes(s.deliveryStatus));
+
   if (loading) {
     return (
       <div className="text-center py-12 text-zinc-500">
@@ -374,7 +449,7 @@ export function InfluencerSection() {
   return (
     <div>
       {/* Actions */}
-      <div className="flex gap-3 mb-4">
+      <div className="flex gap-3 mb-4 items-center">
         <Button size="sm" onClick={() => setShowAdd(!showAdd)}>
           <Plus className="h-4 w-4 mr-1" />
           Add Shipment
@@ -382,6 +457,17 @@ export function InfluencerSection() {
         <Button size="sm" onClick={handleRefresh} disabled={refreshing}>
           {refreshing ? "Refreshing..." : "Refresh All"}
         </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <Switch
+            id="show-completed-influencer"
+            checked={showCompleted}
+            onCheckedChange={setShowCompleted}
+            className="data-checked:bg-blue-600 data-unchecked:bg-zinc-700"
+          />
+          <label htmlFor="show-completed-influencer" className="text-sm text-zinc-400">
+            Show completed
+          </label>
+        </div>
       </div>
 
       {/* Add form */}
@@ -408,6 +494,7 @@ export function InfluencerSection() {
           </label>
           <div className="flex gap-2 flex-wrap items-center">
             <Input
+              ref={labelInputRef}
               placeholder="Label / Name *"
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
@@ -467,7 +554,7 @@ export function InfluencerSection() {
       )}
 
       {/* Table */}
-      {shipments.length === 0 ? (
+      {filteredShipments.length === 0 ? (
         <div className="text-center py-16 text-zinc-500">
           <Package className="h-12 w-12 mx-auto mb-3 text-zinc-700" />
           <p className="text-lg text-zinc-400">No influencer shipments</p>
@@ -490,10 +577,16 @@ export function InfluencerSection() {
                 <TableHead className="hidden md:table-cell text-zinc-500 text-xs uppercase tracking-wider font-medium">
                   Destination
                 </TableHead>
+                <TableHead className="hidden md:table-cell text-zinc-500 text-xs uppercase tracking-wider font-medium">
+                  Sent
+                </TableHead>
+                <TableHead className="hidden md:table-cell text-zinc-500 text-xs uppercase tracking-wider font-medium">
+                  Delivered
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {shipments.map((shipment) => {
+              {filteredShipments.map((shipment) => {
                 const isExpanded = expandedId === shipment.id;
                 const shipmentProducts = products[shipment.id] || [];
                 return (
@@ -544,6 +637,16 @@ export function InfluencerSection() {
                       <TableCell className="hidden md:table-cell text-sm text-zinc-400">
                         {shipment.destinationCity || "-"}
                       </TableCell>
+                      <TableCell className="hidden md:table-cell text-sm text-zinc-400">
+                        {shipment.createdAt
+                          ? new Date(shipment.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-sm text-zinc-400">
+                        {shipment.deliveredDate
+                          ? new Date(shipment.deliveredDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+                          : "-"}
+                      </TableCell>
                     </TableRow>
                     {isExpanded && (
                       <TableRow
@@ -551,7 +654,7 @@ export function InfluencerSection() {
                         className="hover:bg-transparent"
                       >
                         <TableCell
-                          colSpan={4}
+                          colSpan={6}
                           className="bg-zinc-900/80 border-b border-zinc-800/40 p-0 whitespace-normal"
                         >
                           <div className="px-6 py-5 border-l-2 border-l-blue-500/30">
@@ -601,6 +704,27 @@ export function InfluencerSection() {
                                 </Badge>
                               )}
                             </div>
+                            {/* Dates display (mobile) */}
+                            <div className="flex gap-4 text-sm mb-3 md:hidden">
+                              {shipment.createdAt && (
+                                <div className="flex items-center gap-1">
+                                  <Calendar className="h-3 w-3 text-zinc-500" />
+                                  <span className="text-zinc-500">Sent:</span>{" "}
+                                  <span className="text-zinc-200">
+                                    {new Date(shipment.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                  </span>
+                                </div>
+                              )}
+                              {shipment.deliveredDate && (
+                                <div className="flex items-center gap-1">
+                                  <Calendar className="h-3 w-3 text-zinc-500" />
+                                  <span className="text-zinc-500">Delivered:</span>{" "}
+                                  <span className="text-zinc-200">
+                                    {new Date(shipment.deliveredDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                             {/* Mark Delivered for Jaipur influencers */}
                             {shipment.isJaipurInfluencer && shipment.deliveryStatus !== "Delivered" && (
                               <div className="mb-3">
@@ -616,6 +740,45 @@ export function InfluencerSection() {
                                   <CheckCircle2 className="h-3 w-3 mr-1" />
                                   Mark Delivered
                                 </Button>
+                              </div>
+                            )}
+                            {/* Status actions */}
+                            {shipment.deliveryStatus === "Delivered" && (
+                              <div className="flex gap-2 mb-3">
+                                <button
+                                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-indigo-500/30 text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleUpdateInfluencerStatus(shipment.id, "Video Received");
+                                  }}
+                                >
+                                  <Video className="h-3.5 w-3.5" />
+                                  Video Received
+                                </button>
+                                <button
+                                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-zinc-600/50 text-zinc-300 bg-zinc-700/30 hover:bg-zinc-700/50 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleUpdateInfluencerStatus(shipment.id, "Completed");
+                                  }}
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                  Mark As Completed
+                                </button>
+                              </div>
+                            )}
+                            {shipment.deliveryStatus === "Video Received" && (
+                              <div className="flex gap-2 mb-3">
+                                <button
+                                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-zinc-600/50 text-zinc-300 bg-zinc-700/30 hover:bg-zinc-700/50 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleUpdateInfluencerStatus(shipment.id, "Completed");
+                                  }}
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                  Mark As Completed
+                                </button>
                               </div>
                             )}
                             {/* Courier Journey Toggle */}
@@ -713,7 +876,24 @@ export function InfluencerSection() {
                                           </span>
                                         )}
                                       </div>
-                                      <div className="flex gap-1 flex-shrink-0">
+                                      <div className="flex gap-1 flex-shrink-0 items-center">
+                                        <button
+                                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                                            product.received
+                                              ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
+                                              : "border-zinc-700 text-zinc-500 bg-zinc-800/50 hover:text-zinc-300 hover:border-zinc-600"
+                                          }`}
+                                          onClick={() =>
+                                            handleToggleProductReceived(
+                                              shipment.id,
+                                              product.id
+                                            )
+                                          }
+                                          title={product.received ? "Mark as not received" : "Mark as received back"}
+                                        >
+                                          <PackageCheck className="h-3 w-3" />
+                                          {product.received ? "Received Back" : "Received Back"}
+                                        </button>
                                         <Button
                                           variant="ghost"
                                           size="sm"
@@ -751,6 +931,7 @@ export function InfluencerSection() {
                                 <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 space-y-3">
                                   <div className="flex gap-2">
                                     <Input
+                                      ref={productUrlInputRef}
                                       placeholder="Product URL (e.g. urbannaari.co.in/products/...)"
                                       value={productForm.url}
                                       onChange={(e) =>
@@ -817,6 +998,7 @@ export function InfluencerSection() {
                                       </div>
                                       <div className="flex gap-2 items-center">
                                         <Input
+                                          ref={sizeInputRef}
                                           placeholder="Size (e.g. S, M, L, XL)"
                                           value={productForm.size}
                                           onChange={(e) =>
@@ -825,6 +1007,13 @@ export function InfluencerSection() {
                                               size: e.target.value,
                                             }))
                                           }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" && productForm.name && productForm.url) {
+                                              editingProductId
+                                                ? handleEditProduct(shipment.id)
+                                                : handleAddProduct(shipment.id);
+                                            }
+                                          }}
                                           className="w-48"
                                         />
                                         <Button

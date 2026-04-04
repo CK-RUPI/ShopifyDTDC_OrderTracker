@@ -15,6 +15,9 @@ const ALLOWED_TRANSITIONS: Record<DeliveryStatus, DeliveryStatus[]> = {
   "RTO Received": [],
   "Return Initiated": [],
   "Return Complete": [],
+  "Video Received": [],
+  "Product Received Back": [],
+  "Completed": [],
 };
 
 /**

@@ -611,6 +611,18 @@ const darkStatusConfig: Record<
     className: "bg-teal-500/10 text-teal-400 border-teal-500/20",
     label: "Return Complete",
   },
+  "Video Received": {
+    className: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
+    label: "Video Received",
+  },
+  "Product Received Back": {
+    className: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+    label: "Product Received Back",
+  },
+  Completed: {
+    className: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
+    label: "Completed",
+  },
 };
 
 function StatusBadgeDark({ status }: { status: DeliveryStatus }) {
