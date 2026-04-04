@@ -853,6 +853,20 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays, shippingCo
     }
   };
 
+  const handleDeliveredToCustomer = async (orderId: string) => {
+    setActionLoading(`delivered-to-customer-${orderId}`);
+    try {
+      await fetch(`/api/orders/${orderId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deliveryStatus: "Delivered" }),
+      });
+      onOrderUpdated?.();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleMarkRtoReceived = async (orderId: string) => {
     setActionLoading(`rto-received-${orderId}`);
     try {
@@ -1479,27 +1493,48 @@ Thank you! ${E.heart}
                             </Button>
                           )}
 
-                          {/* RTO Confirmed */}
+                          {/* RTO Confirmed / Delivered to Customer */}
                           {order.deliveryStatus === "RTO" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10 bg-transparent"
-                              disabled={
-                                actionLoading === `rto-confirmed-${order.id}`
-                              }
-                              onClick={() =>
-                                handleMarkRtoConfirmed(order.id)
-                              }
-                            >
-                              {actionLoading ===
-                              `rto-confirmed-${order.id}` ? (
-                                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                              ) : (
-                                <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                              )}
-                              RTO Confirmed
-                            </Button>
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10 bg-transparent"
+                                disabled={
+                                  actionLoading === `rto-confirmed-${order.id}`
+                                }
+                                onClick={() =>
+                                  handleMarkRtoConfirmed(order.id)
+                                }
+                              >
+                                {actionLoading ===
+                                `rto-confirmed-${order.id}` ? (
+                                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                ) : (
+                                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                                )}
+                                RTO Confirmed
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-green-500/30 text-green-400 hover:bg-green-500/10 bg-transparent"
+                                disabled={
+                                  actionLoading === `delivered-to-customer-${order.id}`
+                                }
+                                onClick={() =>
+                                  handleDeliveredToCustomer(order.id)
+                                }
+                              >
+                                {actionLoading ===
+                                `delivered-to-customer-${order.id}` ? (
+                                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                ) : (
+                                  <Check className="h-3.5 w-3.5 mr-1.5" />
+                                )}
+                                Delivered to Customer
+                              </Button>
+                            </>
                           )}
 
                           {/* RTO Received */}
