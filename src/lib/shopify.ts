@@ -195,6 +195,7 @@ export async function createShopifyFulfillment(
     method: "POST",
     body: {
       fulfillment: {
+        notify_customer: true,
         line_items_by_fulfillment_order: lineItemsByFulfillmentOrder,
         tracking_info: {
           number: trackingNumber,
