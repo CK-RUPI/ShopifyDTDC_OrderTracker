@@ -321,6 +321,8 @@ export function InfluencerSection() {
       const data = await res.json();
       if (!data.success) {
         setMessage({ type: "error", text: data.error || "Failed to save products" });
+      } else if (data.inventoryWarnings?.length) {
+        setMessage({ type: "error", text: data.inventoryWarnings.join(", ") });
       }
     } catch {
       setMessage({ type: "error", text: "Failed to save products" });
@@ -994,10 +996,10 @@ export function InfluencerSection() {
                                               product.id
                                             )
                                           }
-                                          title={product.received ? "Mark as not received" : "Mark as received back"}
+                                          title={product.received ? "Mark as not received" : "Mark as received"}
                                         >
                                           <PackageCheck className="h-3 w-3" />
-                                          {product.received ? "Received Back" : "Received Back"}
+                                          {product.received ? "Received" : "Received Back ?"}
                                         </button>
                                         <Button
                                           variant="ghost"

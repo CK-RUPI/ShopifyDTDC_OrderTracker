@@ -275,6 +275,93 @@ export async function getProductFromPublicUrl(
   }
 }
 
+// --- Inventory Management ---
+
+let cachedLocationId: number | null = null;
+
+async function getLocationId(inventoryItemId: number): Promise<number> {
+  if (cachedLocationId) return cachedLocationId;
+
+  // Get location from inventory levels (avoids needing read_locations scope)
+  const data = (await shopifyFetch(
+    `/inventory_levels.json?inventory_item_ids=${inventoryItemId}`
+  )) as {
+    inventory_levels: Array<{ location_id: number }>;
+  };
+
+  if (!data.inventory_levels.length) {
+    throw new Error("No inventory levels found for this item");
+  }
+
+  cachedLocationId = data.inventory_levels[0].location_id;
+  return cachedLocationId;
+}
+
+async function getProductByHandle(
+  handle: string
+): Promise<Array<{ id: number; title: string; inventory_item_id: number }> | null> {
+  try {
+    const data = (await shopifyFetch(
+      `/products.json?handle=${encodeURIComponent(handle)}`
+    )) as {
+      products: Array<{
+        variants: Array<{
+          id: number;
+          title: string;
+          inventory_item_id: number;
+        }>;
+      }>;
+    };
+
+    if (!data.products.length) return null;
+    return data.products[0].variants;
+  } catch {
+    return null;
+  }
+}
+
+export async function findVariantInventoryItemId(
+  handle: string,
+  size: string
+): Promise<number | null> {
+  const variants = await getProductByHandle(handle);
+  if (!variants) return null;
+
+  const sizeLower = size.trim().toLowerCase();
+  const match = variants.find((v) => v.title.trim().toLowerCase() === sizeLower);
+  return match ? match.inventory_item_id : null;
+}
+
+export async function adjustInventory(
+  inventoryItemId: number,
+  delta: number
+): Promise<{ adjusted: boolean; warning?: string }> {
+  const locationId = await getLocationId(inventoryItemId);
+
+  // Check current level before deducting
+  if (delta < 0) {
+    const data = (await shopifyFetch(
+      `/inventory_levels.json?inventory_item_ids=${inventoryItemId}`
+    )) as {
+      inventory_levels: Array<{ available: number }>;
+    };
+    const current = data.inventory_levels[0]?.available ?? 0;
+    if (current <= 0) {
+      return { adjusted: false, warning: "Inventory is already at zero" };
+    }
+  }
+
+  await shopifyFetch("/inventory_levels/adjust.json", {
+    method: "POST",
+    body: {
+      location_id: locationId,
+      inventory_item_id: inventoryItemId,
+      available_adjustment: delta,
+    },
+  });
+  return { adjusted: true };
+}
+
 export function formatShippingAddress(
   addr: ShopifyOrder["shipping_address"]
 ): string {
