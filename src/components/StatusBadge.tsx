@@ -71,6 +71,10 @@ const statusConfig: Record<
     className: "bg-zinc-100 text-zinc-800 border-zinc-300",
     label: "Completed",
   },
+  Cancelled: {
+    className: "bg-red-100 text-red-800 border-red-300",
+    label: "Cancelled",
+  },
 };
 
 export function StatusBadge({ status }: { status: DeliveryStatus }) {

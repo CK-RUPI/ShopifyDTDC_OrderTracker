@@ -86,6 +86,7 @@ export interface ShopifyOrder {
     title: string;
     quantity: number;
   }>;
+  cancelled_at: string | null;
   fulfillments: Array<{
     id: number;
     status: string;
@@ -221,6 +222,20 @@ export async function getOrderLineItems(
     quantity: li.quantity,
     variantTitle: li.variant_title || "",
   }));
+}
+
+export async function cancelShopifyOrder(shopifyOrderId: string): Promise<void> {
+  await shopifyFetch(`/orders/${shopifyOrderId}/cancel.json`, {
+    method: "POST",
+    body: { reason: "other", email: false },
+  });
+}
+
+export async function getShopifyOrder(shopifyOrderId: string): Promise<ShopifyOrder> {
+  const data = (await shopifyFetch(`/orders/${shopifyOrderId}.json`)) as {
+    order: ShopifyOrder;
+  };
+  return data.order;
 }
 
 export function extractProductHandle(url: string): string | null {

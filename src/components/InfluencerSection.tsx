@@ -104,6 +104,10 @@ const darkStatusConfig: Record<
     className: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
     label: "Completed",
   },
+  Cancelled: {
+    className: "bg-red-500/10 text-red-400 border-red-500/20",
+    label: "Cancelled",
+  },
 };
 
 const COMPLETED_INFLUENCER_STATUSES: DeliveryStatus[] = [

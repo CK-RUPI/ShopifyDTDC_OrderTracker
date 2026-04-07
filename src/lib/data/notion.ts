@@ -24,6 +24,7 @@ let cachedInfluencerDbId: string | null = null;
 let shippingModePropertyCreated = false;
 let reviewEmailPropertyCreated = false;
 let weightPropertyCreated = false;
+let cancelReasonPropertyCreated = false;
 
 async function getDatabaseId(): Promise<string> {
   if (cachedDatabaseId) return cachedDatabaseId;
@@ -212,6 +213,7 @@ function parseOrder(page: Record<string, unknown>): Order {
     reviewEmailSent: getCheckbox(props["Review Email Sent"]),
     shippingMode: (shippingModeRaw || (paymentMethod === "COD" ? "Road" : "Air")) as "Air" | "Road",
     weightGrams,
+    cancellationReason: getText(props["Cancellation Reason"]),
   };
 }
 
@@ -387,9 +389,9 @@ export const notionProvider: DataProvider = {
       return !isNaN(num) && num > 1025;
     });
 
-    // Client-side filter: hide "RTO Received" (can't filter in Notion until option exists)
+    // Client-side filter: hide terminal statuses (can't filter in Notion until option exists)
     if (filters?.hideDelivered) {
-      orders = orders.filter((o) => o.deliveryStatus !== "RTO Received");
+      orders = orders.filter((o) => o.deliveryStatus !== "RTO Received" && o.deliveryStatus !== "Cancelled");
     }
 
     if (filters?.search) {
@@ -572,6 +574,7 @@ export const notionProvider: DataProvider = {
         { property: "Delivery Status", select: { does_not_equal: "Delivered" } },
         { property: "Delivery Status", select: { does_not_equal: "RTO Received" } },
         { property: "Delivery Status", select: { does_not_equal: "Return Complete" } },
+        { property: "Delivery Status", select: { does_not_equal: "Cancelled" } },
       ],
     });
 
@@ -771,6 +774,43 @@ export const notionProvider: DataProvider = {
         },
       }),
     });
+  },
+
+  async cancelOrder(orderId: string, reason: string): Promise<void> {
+    // Ensure the "Cancellation Reason" property exists
+    if (!cancelReasonPropertyCreated) {
+      const databaseId = await getDatabaseId();
+      await fetch(`${NOTION_API}/databases/${databaseId}`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({
+          properties: {
+            "Cancellation Reason": { rich_text: {} },
+          },
+        }),
+      });
+      cancelReasonPropertyCreated = true;
+    }
+
+    const now = new Date().toISOString().split("T")[0];
+    const res = await fetch(`${NOTION_API}/pages/${orderId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: {
+          "Delivery Status": { select: { name: "Cancelled" } },
+          "Cancellation Reason": {
+            rich_text: [{ text: { content: reason } }],
+          },
+          "Last Updated": { date: { start: now } },
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`Notion cancelOrder failed for ${orderId}: ${res.status}`, errorBody);
+      throw new Error(`Notion update failed: ${res.status}`);
+    }
   },
 
   // Influencer Shipments

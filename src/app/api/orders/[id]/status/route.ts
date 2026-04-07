@@ -17,6 +17,7 @@ const VALID_STATUSES: DeliveryStatus[] = [
   "RTO Received",
   "Return Initiated",
   "Return Complete",
+  // "Cancelled" — use /api/orders/[id]/cancel instead (must go through Shopify)
 ];
 
 export async function PATCH(

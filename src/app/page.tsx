@@ -87,6 +87,7 @@ function isDelayed(order: Order, thresholdDays: number): boolean {
     "RTO Received",
     "Return Initiated",
     "Return Complete",
+    "Cancelled",
   ];
   if (excludedStatuses.includes(order.deliveryStatus) || !order.fulfilledDate) {
     return false;
@@ -167,6 +168,7 @@ const statuses: Array<{ value: string; label: string }> = [
   { value: "RTO Received", label: "RTO Received" },
   { value: "Return Initiated", label: "Return Initiated" },
   { value: "Return Complete", label: "Return Complete" },
+  { value: "Cancelled", label: "Cancelled" },
 ];
 
 // =============================================================================
@@ -623,6 +625,10 @@ const darkStatusConfig: Record<
     className: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
     label: "Completed",
   },
+  Cancelled: {
+    className: "bg-red-500/10 text-red-400 border-red-500/20",
+    label: "Cancelled",
+  },
 };
 
 function StatusBadgeDark({ status }: { status: DeliveryStatus }) {
@@ -768,6 +774,8 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays, shippingCo
   const [trackingInputs, setTrackingInputs] = useState<Record<string, string>>({});
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [timelineOpen, setTimelineOpen] = useState<Set<string>>(new Set());
+  const [cancelDialogOrder, setCancelDialogOrder] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
 
   if (orders.length === 0) {
     return (
@@ -833,6 +841,30 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays, shippingCo
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deliveryStatus: "RTO" }),
       });
+      onOrderUpdated?.();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleCancelOrder = async (orderId: string) => {
+    setActionLoading(`cancel-${orderId}`);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: cancelReason }),
+      });
+      const result = await res.json();
+      if (!result.success) {
+        alert(`Cancel failed: ${result.error}`);
+        return;
+      }
+      if (result.warning) {
+        alert(result.warning);
+      }
+      setCancelDialogOrder(null);
+      setCancelReason("");
       onOrderUpdated?.();
     } finally {
       setActionLoading(null);
@@ -1276,6 +1308,19 @@ Thank you! ${E.heart}
                                   Confirm on WhatsApp
                                 </Button>
                               )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-red-500/30 text-red-400 hover:bg-red-500/10 bg-transparent"
+                                disabled={actionLoading === `cancel-${order.id}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCancelDialogOrder(order.id);
+                                }}
+                              >
+                                <X className="h-3.5 w-3.5 mr-1.5" />
+                                Cancel Order
+                              </Button>
                             </div>
                           </div>
                         )}
@@ -1329,6 +1374,17 @@ Thank you! ${E.heart}
                             <MapPin className="h-3 w-3 mt-0.5 shrink-0" />
                             {order.shippingAddress}
                           </p>
+                        )}
+
+                        {/* Cancellation reason */}
+                        {order.deliveryStatus === "Cancelled" && order.cancellationReason && (
+                          <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                            <X className="h-4 w-4 shrink-0" />
+                            <span>
+                              <strong>Cancellation Reason:</strong>{" "}
+                              {order.cancellationReason}
+                            </span>
+                          </div>
                         )}
 
                         {/* Delayed warning */}
@@ -1782,6 +1838,67 @@ Thank you! ${E.heart}
           })}
         </TableBody>
       </Table>
+
+      {/* Cancel Order Dialog */}
+      <Dialog
+        open={!!cancelDialogOrder}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCancelDialogOrder(null);
+            setCancelReason("");
+          }
+        }}
+      >
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-zinc-100">
+          <DialogHeader>
+            <DialogTitle className="text-red-400">Cancel Order</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-zinc-400">
+              This will cancel the order on Shopify. This action cannot be undone.
+            </p>
+            <div>
+              <label className="text-sm text-zinc-400 block mb-1.5">
+                Cancellation Reason / Remarks
+              </label>
+              <Input
+                placeholder="Enter reason for cancellation..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="bg-zinc-800/60 border-zinc-700/50 text-zinc-200"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-zinc-700/50 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                onClick={() => {
+                  setCancelDialogOrder(null);
+                  setCancelReason("");
+                }}
+              >
+                Go Back
+              </Button>
+              <Button
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={!cancelReason.trim() || actionLoading === `cancel-${cancelDialogOrder}`}
+                onClick={() => {
+                  if (cancelDialogOrder) handleCancelOrder(cancelDialogOrder);
+                }}
+              >
+                {actionLoading === `cancel-${cancelDialogOrder}` ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <X className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Confirm Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -2040,7 +2157,7 @@ export default function DashboardCommandCenter() {
       if (data.success) {
         setMessage({
           type: "success",
-          text: `Synced ${data.synced} fulfilled + ${data.unfulfilled || 0} unfulfilled orders from Shopify`,
+          text: `Synced ${data.synced} fulfilled + ${data.unfulfilled || 0} unfulfilled orders${data.cancelled ? ` (${data.cancelled} cancelled)` : ""} from Shopify`,
         });
         fetchOrders();
       } else {

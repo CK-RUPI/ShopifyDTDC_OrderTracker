@@ -14,7 +14,8 @@ export type DeliveryStatus =
   | "Return Complete"
   | "Video Received"
   | "Product Received Back"
-  | "Completed";
+  | "Completed"
+  | "Cancelled";
 
 export type EmailType = "delivery_confirmation" | "review_request";
 
@@ -55,6 +56,7 @@ export interface Order {
   reviewEmailSent: boolean;
   shippingMode: "Air" | "Road" | "";
   weightGrams: number;
+  cancellationReason: string;
 }
 
 export interface Product {
@@ -146,6 +148,7 @@ export interface DataProvider {
   ): Promise<void>;
   markEmailSent(orderId: string): Promise<void>;
   markReviewEmailSent(orderId: string): Promise<void>;
+  cancelOrder(orderId: string, reason: string): Promise<void>;
   getOrderById(orderId: string): Promise<Order | null>;
   // Influencer shipments
   getInfluencerShipments(): Promise<InfluencerShipment[]>;

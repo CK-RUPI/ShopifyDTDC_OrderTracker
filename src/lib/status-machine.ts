@@ -2,7 +2,7 @@ import { DeliveryStatus } from "@/lib/data/types";
 
 // Allowed automated transitions from each status
 const ALLOWED_TRANSITIONS: Record<DeliveryStatus, DeliveryStatus[]> = {
-  "Unfulfilled": ["Booked", "Picked Up", "In Transit", "At Destination", "Out for Delivery", "Delivered", "Undelivered", "RTO"],
+  "Unfulfilled": ["Booked", "Picked Up", "In Transit", "At Destination", "Out for Delivery", "Delivered", "Undelivered", "RTO", "Cancelled"],
   "Booked": ["Picked Up", "In Transit", "At Destination", "Out for Delivery", "Delivered", "Undelivered", "RTO"],
   "Picked Up": ["In Transit", "At Destination", "Out for Delivery", "Delivered", "Undelivered", "RTO"],
   "In Transit": ["At Destination", "Out for Delivery", "Delivered", "Undelivered", "RTO"],
@@ -18,6 +18,7 @@ const ALLOWED_TRANSITIONS: Record<DeliveryStatus, DeliveryStatus[]> = {
   "Video Received": [],
   "Product Received Back": [],
   "Completed": [],
+  "Cancelled": [],
 };
 
 /**
