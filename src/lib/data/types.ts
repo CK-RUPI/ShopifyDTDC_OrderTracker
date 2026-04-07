@@ -174,4 +174,8 @@ export interface DataProvider {
     }
   ): Promise<void>;
   markInfluencerDelivered(shipmentId: string): Promise<void>;
+  updateInfluencerTrackingNumber(
+    shipmentId: string,
+    trackingNumber: string
+  ): Promise<void>;
 }

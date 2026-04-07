@@ -159,6 +159,9 @@ export function InfluencerSection() {
   const [savingProducts, setSavingProducts] = useState<string | null>(null);
   const [timelineOpen, setTimelineOpen] = useState<Set<string>>(new Set());
   const [showCompleted, setShowCompleted] = useState(false);
+  const [editingTrackingId, setEditingTrackingId] = useState<string | null>(null);
+  const [editTrackingValue, setEditTrackingValue] = useState("");
+  const [savingTracking, setSavingTracking] = useState(false);
 
   // Refs for auto-focus
   const labelInputRef = useRef<HTMLInputElement>(null);
@@ -227,7 +230,6 @@ export function InfluencerSection() {
   };
 
   const handleAdd = async () => {
-    if (!isJaipurInfluencer && !newTracking) return;
     if (!newPhone) return;
     setAdding(true);
     setMessage(null);
@@ -437,6 +439,29 @@ export function InfluencerSection() {
     }
   };
 
+  const handleSaveTracking = async (shipmentId: string) => {
+    setSavingTracking(true);
+    try {
+      const res = await fetch(`/api/influencer/${shipmentId}/tracking`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trackingNumber: editTrackingValue.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEditingTrackingId(null);
+        setEditTrackingValue("");
+        fetchShipments();
+      } else {
+        setMessage({ type: "error", text: data.error || "Failed to save tracking" });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to save tracking number" });
+    } finally {
+      setSavingTracking(false);
+    }
+  };
+
   // Filter shipments: toggle OFF = active only, toggle ON = completed only
   const filteredShipments = showCompleted
     ? shipments.filter((s) => COMPLETED_INFLUENCER_STATUSES.includes(s.deliveryStatus))
@@ -512,7 +537,7 @@ export function InfluencerSection() {
             />
             {!isJaipurInfluencer && (
               <Input
-                placeholder="Tracking Number *"
+                placeholder="Tracking Number (optional)"
                 value={newTracking}
                 onChange={(e) => setNewTracking(e.target.value)}
                 className="w-52"
@@ -529,11 +554,7 @@ export function InfluencerSection() {
             <Button
               size="sm"
               onClick={handleAdd}
-              disabled={
-                adding ||
-                !newPhone ||
-                (!isJaipurInfluencer && !newTracking)
-              }
+              disabled={adding || !newPhone}
             >
               {adding ? "Adding..." : "Add Shipment"}
             </Button>
@@ -689,6 +710,86 @@ export function InfluencerSection() {
                                   <span className="font-medium text-zinc-200">
                                     {shipment.instagramHandle}
                                   </span>
+                                </div>
+                              )}
+                              {!shipment.isJaipurInfluencer && (
+                                <div className="flex items-center gap-1">
+                                  {editingTrackingId === shipment.id ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <Package className="h-3 w-3 text-zinc-500" />
+                                      <Input
+                                        value={editTrackingValue}
+                                        onChange={(e) => setEditTrackingValue(e.target.value)}
+                                        placeholder="Tracking number"
+                                        className="h-7 w-48 text-xs"
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter" && editTrackingValue.trim()) {
+                                            handleSaveTracking(shipment.id);
+                                          }
+                                          if (e.key === "Escape") {
+                                            setEditingTrackingId(null);
+                                            setEditTrackingValue("");
+                                          }
+                                        }}
+                                        autoFocus
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                      <Button
+                                        size="sm"
+                                        className="h-7 text-xs px-2"
+                                        disabled={savingTracking || !editTrackingValue.trim()}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleSaveTracking(shipment.id);
+                                        }}
+                                      >
+                                        {savingTracking ? "..." : "Save"}
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 w-7 p-0 text-zinc-500 hover:text-zinc-300"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setEditingTrackingId(null);
+                                          setEditTrackingValue("");
+                                        }}
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  ) : shipment.trackingNumber ? (
+                                    <div className="flex items-center gap-1">
+                                      <Package className="h-3 w-3 text-zinc-500" />
+                                      <span className="font-medium text-zinc-200">
+                                        {shipment.trackingNumber}
+                                      </span>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-5 w-5 p-0 text-zinc-600 hover:text-zinc-300"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setEditingTrackingId(shipment.id);
+                                          setEditTrackingValue(shipment.trackingNumber);
+                                        }}
+                                      >
+                                        <Pencil className="h-2.5 w-2.5" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingTrackingId(shipment.id);
+                                        setEditTrackingValue("");
+                                      }}
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                      Add Tracking
+                                    </button>
+                                  )}
                                 </div>
                               )}
                               {shipment.receiverName && (

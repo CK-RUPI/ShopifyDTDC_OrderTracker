@@ -22,13 +22,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { trackingNumber, label, phoneNumber, instagramHandle, isJaipurInfluencer } = body;
 
-    if (!isJaipurInfluencer && !trackingNumber) {
-      return NextResponse.json(
-        { success: false, error: "Tracking number is required" },
-        { status: 400 }
-      );
-    }
-
     if (!phoneNumber) {
       return NextResponse.json(
         { success: false, error: "Phone number is required" },

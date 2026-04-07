@@ -955,6 +955,32 @@ export const notionProvider: DataProvider = {
     });
   },
 
+  async updateInfluencerTrackingNumber(
+    shipmentId: string,
+    trackingNumber: string
+  ): Promise<void> {
+    const now = new Date().toISOString().split("T")[0];
+    const properties: Record<string, unknown> = {
+      "Tracking Number": {
+        rich_text: [{ text: { content: trackingNumber } }],
+      },
+      "Last Updated": { date: { start: now } },
+    };
+    if (trackingNumber) {
+      properties["Courier Partner"] = { select: { name: "DTDC" } };
+    }
+    const res = await fetch(`${NOTION_API}/pages/${shipmentId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({ properties }),
+    });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`Failed to update influencer tracking number: ${res.status}`, errorBody);
+      throw new Error(`Notion update failed: ${res.status}`);
+    }
+  },
+
   async markInfluencerDelivered(shipmentId: string): Promise<void> {
     const now = new Date().toISOString().split("T")[0];
     const res = await fetch(`${NOTION_API}/pages/${shipmentId}`, {
