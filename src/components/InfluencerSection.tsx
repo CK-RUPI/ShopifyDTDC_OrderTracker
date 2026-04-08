@@ -33,6 +33,7 @@ import {
   PackageCheck,
   Video,
   Undo2,
+  AlertTriangle,
 } from "lucide-react";
 
 // Dark-themed status badge matching the orders table
@@ -645,13 +646,20 @@ export function InfluencerSection() {
                         </Button>
                       </TableCell>
                       <TableCell className="font-medium text-sm text-zinc-200">
-                        {shipment.label}
-                        {shipmentProducts.length > 0 && (
-                          <span className="ml-2 text-xs text-zinc-500">
-                            ({shipmentProducts.length} product
-                            {shipmentProducts.length !== 1 ? "s" : ""})
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {shipment.label}
+                          {shipmentProducts.length > 0 && (
+                            <span className="text-xs text-zinc-500">
+                              ({shipmentProducts.length} product
+                              {shipmentProducts.length !== 1 ? "s" : ""})
+                            </span>
+                          )}
+                          {shipment.attemptCount >= 2 && (
+                            <span className={`px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded border ${shipment.attemptCount >= 3 ? "bg-red-500/15 text-red-400 border-red-500/30" : "bg-orange-500/15 text-orange-400 border-orange-500/30"}`}>
+                              {shipment.attemptCount} attempts
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -662,7 +670,7 @@ export function InfluencerSection() {
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-sm text-zinc-400">
-                        {shipment.destinationCity || "-"}
+                        {shipment.destinationCity ? `${shipment.destinationCity}${shipment.destinationPincode ? ` ${shipment.destinationPincode}` : ""}` : "-"}
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-sm text-zinc-400">
                         {shipment.createdAt
@@ -832,6 +840,39 @@ export function InfluencerSection() {
                                 </div>
                               )}
                             </div>
+                            {/* Delivery person phone (Out for Delivery only) */}
+                            {shipment.deliveryStatus === "Out for Delivery" && shipment.workerMobile && (
+                              <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 text-sm">
+                                <Phone className="h-4 w-4 shrink-0" />
+                                <span>Delivery Person:</span>
+                                <a
+                                  href={`tel:${shipment.workerMobile}`}
+                                  className="font-medium hover:underline"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {shipment.workerMobile}
+                                </a>
+                              </div>
+                            )}
+
+                            {/* Undelivered failure reason */}
+                            {shipment.deliveryStatus === "Undelivered" && shipment.reasonDesc && (
+                              <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                                <AlertTriangle className="h-4 w-4 shrink-0" />
+                                <span>
+                                  <strong>Reason:</strong> {shipment.reasonDesc}
+                                  {shipment.reasonCode && (
+                                    <span className="text-red-400/60 ml-1">({shipment.reasonCode})</span>
+                                  )}
+                                  {shipment.attemptCount > 0 && (
+                                    <span className="text-red-400/60 ml-1">
+                                      | {shipment.attemptCount} attempt{shipment.attemptCount !== 1 ? "s" : ""}
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                            )}
+
                             {/* Mark Delivered for Jaipur influencers */}
                             {shipment.isJaipurInfluencer && shipment.deliveryStatus !== "Delivered" && (
                               <div className="mb-3">

@@ -19,6 +19,8 @@ export type DeliveryStatus =
 
 export type EmailType = "delivery_confirmation" | "review_request";
 
+export type CodConfirmationStatus = "Confirmed on Call" | "Confirmed on WhatsApp" | "Declined" | "No Reply" | "";
+
 export interface TrackingEvent {
   timestamp: string;
   status: string;
@@ -52,11 +54,18 @@ export interface Order {
   lastUpdated: string;
   trackingTimeline: TrackingEvent[];
   rtoTrackingNumber: string;
+  reasonCode: string;
+  reasonDesc: string;
+  attemptCount: number;
+  destinationPincode: string;
+  workerMobile: string;
   deliveryEmailSent: boolean;
   reviewEmailSent: boolean;
   shippingMode: "Air" | "Road" | "";
   weightGrams: number;
   cancellationReason: string;
+  whatsappSent: boolean;
+  codConfirmationStatus: CodConfirmationStatus;
 }
 
 export interface Product {
@@ -79,6 +88,11 @@ export interface InfluencerShipment {
   expectedDeliveryDate: string;
   deliveredDate: string;
   receiverName: string;
+  reasonCode: string;
+  reasonDesc: string;
+  attemptCount: number;
+  destinationPincode: string;
+  workerMobile: string;
   lastUpdated: string;
   trackingTimeline: TrackingEvent[];
   createdAt: string;
@@ -121,6 +135,12 @@ export interface DataProvider {
       deliveredDate: string;
       deliveredTimestamp: string;
       receiverName: string;
+      rtoNumber: string;
+      reasonCode: string;
+      reasonDesc: string;
+      attemptCount: number;
+      destinationPincode: string;
+      workerMobile: string;
       lastUpdated: string;
       trackingTimeline: TrackingEvent[];
     },
@@ -149,6 +169,8 @@ export interface DataProvider {
   markEmailSent(orderId: string): Promise<void>;
   markReviewEmailSent(orderId: string): Promise<void>;
   cancelOrder(orderId: string, reason: string): Promise<void>;
+  markWhatsAppSent(orderId: string, isCod: boolean): Promise<void>;
+  updateCodConfirmation(orderId: string, status: "Confirmed on Call" | "Confirmed on WhatsApp" | "Declined" | "No Reply"): Promise<void>;
   getOrderById(orderId: string): Promise<Order | null>;
   // Influencer shipments
   getInfluencerShipments(): Promise<InfluencerShipment[]>;
@@ -169,6 +191,11 @@ export interface DataProvider {
       expectedDeliveryDate: string;
       deliveredDate: string;
       receiverName: string;
+      reasonCode: string;
+      reasonDesc: string;
+      attemptCount: number;
+      destinationPincode: string;
+      workerMobile: string;
       lastUpdated: string;
       trackingTimeline: TrackingEvent[];
     }

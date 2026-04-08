@@ -776,6 +776,32 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays, shippingCo
   const [timelineOpen, setTimelineOpen] = useState<Set<string>>(new Set());
   const [cancelDialogOrder, setCancelDialogOrder] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [cachedLineItems, setCachedLineItems] = useState<Record<string, string>>({});
+
+  const handleExpandOrder = useCallback((orderId: string, isExpanded: boolean) => {
+    if (isExpanded) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(orderId);
+    // Pre-fetch line items in background for WhatsApp message
+    if (!cachedLineItems[orderId]) {
+      fetch(`/api/orders/${orderId}/line-items`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.lineItems) {
+            const text = data.lineItems
+              .map((li: { title: string; quantity: number; variantTitle: string }) => {
+                const size = li.variantTitle ? ` (${li.variantTitle})` : "";
+                return `- ${li.title}${size} x ${li.quantity}`;
+              })
+              .join("\n");
+            setCachedLineItems((prev) => ({ ...prev, [orderId]: text }));
+          }
+        })
+        .catch(() => {}); // Silent — items will be fetched again if needed
+    }
+  }, [cachedLineItems]);
 
   if (orders.length === 0) {
     return (
@@ -1022,43 +1048,25 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays, shippingCo
     }
   };
 
-  const handleWhatsAppConfirmation = async (order: Order) => {
-    setActionLoading(`wa-confirm-${order.id}`);
-    try {
-      let phone = order.customerPhone.replace(/\D/g, "");
-      if (phone.length === 10) phone = `91${phone}`;
-      const firstName = order.customerName.split(" ")[0];
+  const handleWhatsAppConfirmation = (order: Order) => {
+    let phone = order.customerPhone.replace(/\D/g, "");
+    if (phone.length === 10) phone = `91${phone}`;
+    const firstName = order.customerName.split(" ")[0];
 
-      // Fetch line items from Shopify
-      let itemsText = "";
-      try {
-        const res = await fetch(`/api/orders/${order.id}/line-items`);
-        if (res.ok) {
-          const { lineItems } = await res.json();
-          itemsText = lineItems
-            .map((li: { title: string; quantity: number; variantTitle: string }) => {
-              const size = li.variantTitle ? ` (${li.variantTitle})` : "";
-              return `- ${li.title}${size} x ${li.quantity}`;
-            })
-            .join("\n");
-        } else {
-          console.error("Line items fetch failed:", res.status, await res.text());
-        }
-      } catch (err) {
-        console.error("Line items fetch error:", err);
-      }
+    // Use cached line items (pre-fetched on row expand)
+    const itemsText = cachedLineItems[order.id] || "";
 
-      // Generate emojis from code points to avoid file encoding issues
-      const E = {
-        wave: String.fromCodePoint(0x1F44B),
-        bag: String.fromCodePoint(0x1F6CD, 0xFE0F),
-        pin: String.fromCodePoint(0x1F4CD),
-        check: String.fromCodePoint(0x2705),
-        heart: String.fromCodePoint(0x1F49C),
-        hanger: String.fromCodePoint(0x1F45A),
-      };
+    // Generate emojis from code points to avoid file encoding issues
+    const E = {
+      wave: String.fromCodePoint(0x1F44B),
+      bag: String.fromCodePoint(0x1F6CD, 0xFE0F),
+      pin: String.fromCodePoint(0x1F4CD),
+      check: String.fromCodePoint(0x2705),
+      heart: String.fromCodePoint(0x1F49C),
+      hanger: String.fromCodePoint(0x1F45A),
+    };
 
-      const message = `Hi ${firstName}! ${E.wave}
+    const message = `Hi ${firstName}! ${E.wave}
 
 Thank you for your order from *UrbanNaari*! ${E.bag}
 
@@ -1078,10 +1086,37 @@ Just reply *"Yes"* if everything looks good, or let us know the changes needed.
 
 Thank you! ${E.heart}
 -- Team UrbanNaari`;
-      const url = new URL(`https://web.whatsapp.com/send`);
-      url.searchParams.set("phone", phone);
-      url.searchParams.set("text", message);
-      window.open(url.toString(), "_blank");
+    const url = new URL(`https://web.whatsapp.com/send`);
+    url.searchParams.set("phone", phone);
+    url.searchParams.set("text", message);
+
+    window.open(url.toString());
+
+    // Mark as WhatsApp sent in Notion (fire-and-forget, no await)
+    fetch(`/api/orders/${order.id}/whatsapp-status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isCod: order.paymentMethod === "COD" }),
+    })
+      .then(() => onOrderUpdated?.())
+      .catch(() => {});
+  };
+
+  const handleCodConfirmation = async (orderId: string, status: "Confirmed on Call" | "Confirmed on WhatsApp" | "Declined" | "No Reply") => {
+    setActionLoading(`cod-confirm-${orderId}`);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/whatsapp-status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        onOrderUpdated?.();
+      } else {
+        alert("Failed to update COD confirmation status");
+      }
+    } catch {
+      alert("Failed to update COD confirmation status");
     } finally {
       setActionLoading(null);
     }
@@ -1095,7 +1130,7 @@ Thank you! ${E.heart}
     const url = new URL(`https://web.whatsapp.com/send`);
     url.searchParams.set("phone", phone);
     url.searchParams.set("text", message);
-    window.open(url.toString(), "_blank");
+    window.open(url.toString());
   };
 
   const handleRefreshOrder = async (orderId: string) => {
@@ -1162,7 +1197,7 @@ Thank you! ${E.heart}
                     ${isExpanded ? "bg-zinc-800/30" : ""}
                   `}
                   onClick={() =>
-                    setExpandedId(isExpanded ? null : order.id)
+                    handleExpandOrder(order.id, isExpanded)
                   }
                 >
                   <TableCell className="px-2">
@@ -1172,7 +1207,7 @@ Thank you! ${E.heart}
                       className="h-7 w-7 p-0 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setExpandedId(isExpanded ? null : order.id);
+                        handleExpandOrder(order.id, isExpanded);
                       }}
                     >
                       {isExpanded ? (
@@ -1212,6 +1247,11 @@ Thank you! ${E.heart}
                             Delayed
                           </span>
                         )}
+                        {order.attemptCount >= 2 && (
+                          <span className={`px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded border ${order.attemptCount >= 3 ? "bg-red-500/15 text-red-400 border-red-500/30" : "bg-orange-500/15 text-orange-400 border-orange-500/30"}`}>
+                            {order.attemptCount} attempts
+                          </span>
+                        )}
                       </div>
                       {order.customerPhone && (
                         <a
@@ -1226,7 +1266,7 @@ Thank you! ${E.heart}
                     </div>
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-sm text-zinc-400">
-                    {order.destinationCity || "-"}
+                    {order.destinationCity ? `${order.destinationCity}${order.destinationPincode ? ` ${order.destinationPincode}` : ""}` : "-"}
                   </TableCell>
                   <TableCell>
                     <StatusBadgeDark status={order.deliveryStatus} />
@@ -1293,19 +1333,18 @@ Thank you! ${E.heart}
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="border-green-700/50 text-green-400 hover:bg-green-900/30 bg-transparent"
-                                  disabled={actionLoading === `wa-confirm-${order.id}`}
+                                  className={`bg-transparent ${order.whatsappSent ? "border-green-500/30 text-green-300" : "border-green-700/50 text-green-400 hover:bg-green-900/30"}`}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleWhatsAppConfirmation(order);
                                   }}
                                 >
-                                  {actionLoading === `wa-confirm-${order.id}` ? (
-                                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                  {order.whatsappSent ? (
+                                    <Check className="h-3.5 w-3.5 mr-1.5" />
                                   ) : (
                                     <svg className="h-3.5 w-3.5 mr-1.5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
                                   )}
-                                  Confirm on WhatsApp
+                                  {order.whatsappSent ? "WhatsApp Sent" : "Confirm on WhatsApp"}
                                 </Button>
                               )}
                               <Button
@@ -1322,6 +1361,56 @@ Thank you! ${E.heart}
                                 Cancel Order
                               </Button>
                             </div>
+                          </div>
+                        )}
+
+                        {/* COD Confirmation Status */}
+                        {order.paymentMethod === "COD" && (
+                          <div className="flex items-center gap-3 mb-4 px-1">
+                            <span className="text-xs text-zinc-500">COD Confirmation:</span>
+                            <Select
+                              value={order.codConfirmationStatus || "_none"}
+                              onValueChange={(val) => {
+                                if (val !== "_none") {
+                                  handleCodConfirmation(order.id, val as "Confirmed on Call" | "Confirmed on WhatsApp" | "Declined" | "No Reply");
+                                }
+                              }}
+                              disabled={actionLoading === `cod-confirm-${order.id}`}
+                            >
+                              <SelectTrigger
+                                className={`w-[200px] h-7 text-xs bg-transparent border ${
+                                  order.codConfirmationStatus === "Confirmed on Call"
+                                    ? "border-green-500/40 text-green-400"
+                                    : order.codConfirmationStatus === "Confirmed on WhatsApp"
+                                    ? "border-blue-500/40 text-blue-400"
+                                    : order.codConfirmationStatus === "Declined"
+                                    ? "border-red-500/40 text-red-400"
+                                    : order.codConfirmationStatus === "No Reply"
+                                    ? "border-zinc-500/40 text-zinc-400"
+                                    : "border-zinc-700 text-zinc-500"
+                                }`}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <SelectValue placeholder="Select status..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Confirmed on Call">
+                                  <span className="text-green-400">Confirmed on Call</span>
+                                </SelectItem>
+                                <SelectItem value="Confirmed on WhatsApp">
+                                  <span className="text-blue-400">Confirmed on WhatsApp</span>
+                                </SelectItem>
+                                <SelectItem value="Declined">
+                                  <span className="text-red-400">Declined</span>
+                                </SelectItem>
+                                <SelectItem value="No Reply">
+                                  <span className="text-zinc-400">No Reply</span>
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {actionLoading === `cod-confirm-${order.id}` && (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />
+                            )}
                           </div>
                         )}
 
@@ -1376,6 +1465,21 @@ Thank you! ${E.heart}
                           </p>
                         )}
 
+                        {/* Delivery person phone (Out for Delivery only) */}
+                        {order.deliveryStatus === "Out for Delivery" && order.workerMobile && (
+                          <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 text-sm">
+                            <Phone className="h-4 w-4 shrink-0" />
+                            <span>Delivery Person:</span>
+                            <a
+                              href={`tel:${order.workerMobile}`}
+                              className="font-medium hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {order.workerMobile}
+                            </a>
+                          </div>
+                        )}
+
                         {/* Cancellation reason */}
                         {order.deliveryStatus === "Cancelled" && order.cancellationReason && (
                           <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
@@ -1394,6 +1498,24 @@ Thank you! ${E.heart}
                             <span>
                               This order has been in transit for more than{" "}
                               {delayThresholdDays} days ({getDaysInTransit(order)} days)
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Undelivered failure reason */}
+                        {order.deliveryStatus === "Undelivered" && order.reasonDesc && (
+                          <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                            <AlertTriangle className="h-4 w-4 shrink-0" />
+                            <span>
+                              <strong>Reason:</strong> {order.reasonDesc}
+                              {order.reasonCode && (
+                                <span className="text-red-400/60 ml-1">({order.reasonCode})</span>
+                              )}
+                              {order.attemptCount > 0 && (
+                                <span className="text-red-400/60 ml-1">
+                                  | {order.attemptCount} attempt{order.attemptCount !== 1 ? "s" : ""}
+                                </span>
+                              )}
                             </span>
                           </div>
                         )}

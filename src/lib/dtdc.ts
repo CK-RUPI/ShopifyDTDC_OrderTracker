@@ -34,6 +34,12 @@ interface DTDCResponse {
     receiverName: string;
     opsEdd: string;
     bookingDate: string;
+    rtoNumber: string;
+    reasonCode: string;
+    reasonDesc: string;
+    attemptCount: number | null;
+    destinationPincode: string;
+    workerMobile: string;
   } | null;
   milestones: DTDCMilestone[] | null;
   statuses: DTDCStatus[] | null;
@@ -77,6 +83,12 @@ export interface TrackingResult {
   expectedDeliveryDate: string;
   deliveredDate: string;
   receiverName: string;
+  rtoNumber: string;
+  reasonCode: string;
+  reasonDesc: string;
+  attemptCount: number;
+  destinationPincode: string;
+  workerMobile: string;
   timeline: TrackingEvent[];
   error?: string;
 }
@@ -110,6 +122,12 @@ export async function trackShipment(
         expectedDeliveryDate: "",
         deliveredDate: "",
         receiverName: "",
+        rtoNumber: "",
+        reasonCode: "",
+        reasonDesc: "",
+        attemptCount: 0,
+        destinationPincode: "",
+        workerMobile: "",
         timeline: [],
         error: data.errorMessage || "Tracking not found",
       };
@@ -117,6 +135,14 @@ export async function trackShipment(
 
     const header = data.header;
     const status = mapStatus(header.currentStatusDescription);
+
+    // Extract new DTDC fields
+    const rtoNumber = header.rtoNumber || "";
+    const reasonCode = header.reasonCode || "";
+    const reasonDesc = header.reasonDesc || "";
+    const attemptCount = header.attemptCount || 0;
+    const destinationPincode = header.destinationPincode || "";
+    const workerMobile = header.workerMobile || "";
 
     // Parse EDD
     let edd = "";
@@ -150,6 +176,12 @@ export async function trackShipment(
       expectedDeliveryDate: edd,
       deliveredDate,
       receiverName: header.receiverName || "",
+      rtoNumber,
+      reasonCode,
+      reasonDesc,
+      attemptCount,
+      destinationPincode,
+      workerMobile,
       timeline,
     };
   } catch (error) {
@@ -162,6 +194,12 @@ export async function trackShipment(
       expectedDeliveryDate: "",
       deliveredDate: "",
       receiverName: "",
+      rtoNumber: "",
+      reasonCode: "",
+      reasonDesc: "",
+      attemptCount: 0,
+      destinationPincode: "",
+      workerMobile: "",
       timeline: [],
       error: error instanceof Error ? error.message : "Unknown error",
     };

@@ -6,6 +6,7 @@ import {
   TrackingEvent,
   InfluencerShipment,
   Product,
+  CodConfirmationStatus,
 } from "./types";
 
 const NOTION_API = "https://api.notion.com/v1";
@@ -25,6 +26,36 @@ let shippingModePropertyCreated = false;
 let reviewEmailPropertyCreated = false;
 let weightPropertyCreated = false;
 let cancelReasonPropertyCreated = false;
+let whatsappPropertyCreated = false;
+let dtdcFieldsPropertyCreated = false;
+let dtdcFieldsInfluencerCreated = false;
+
+async function ensureDtdcFieldProperties(databaseId: string, isInfluencer: boolean) {
+  const flag = isInfluencer ? dtdcFieldsInfluencerCreated : dtdcFieldsPropertyCreated;
+  if (flag) return;
+  try {
+    await fetch(`${NOTION_API}/databases/${databaseId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: {
+          "Reason Code": { rich_text: {} },
+          "Reason Description": { rich_text: {} },
+          "Attempt Count": { number: {} },
+          "Destination Pincode": { rich_text: {} },
+          "Worker Mobile": { rich_text: {} },
+        },
+      }),
+    });
+  } catch {
+    // Properties may already exist
+  }
+  if (isInfluencer) {
+    dtdcFieldsInfluencerCreated = true;
+  } else {
+    dtdcFieldsPropertyCreated = true;
+  }
+}
 
 async function getDatabaseId(): Promise<string> {
   if (cachedDatabaseId) return cachedDatabaseId;
@@ -209,11 +240,18 @@ function parseOrder(page: Record<string, unknown>): Order {
     lastUpdated: getDate(props["Last Updated"]),
     trackingTimeline: timeline,
     rtoTrackingNumber: getText(props["RTO Tracking Number"]),
+    reasonCode: getText(props["Reason Code"]),
+    reasonDesc: getText(props["Reason Description"]),
+    attemptCount: (props["Attempt Count"] as { number?: number | null } | undefined)?.number ?? 0,
+    destinationPincode: getText(props["Destination Pincode"]),
+    workerMobile: getText(props["Worker Mobile"]),
     deliveryEmailSent: getCheckbox(props["Delivery Email Sent"]),
     reviewEmailSent: getCheckbox(props["Review Email Sent"]),
     shippingMode: (shippingModeRaw || (paymentMethod === "COD" ? "Road" : "Air")) as "Air" | "Road",
     weightGrams,
     cancellationReason: getText(props["Cancellation Reason"]),
+    whatsappSent: getCheckbox(props["WhatsApp Sent"]),
+    codConfirmationStatus: (getSelect(props["COD Confirmed"]) || "") as CodConfirmationStatus,
   };
 }
 
@@ -307,6 +345,11 @@ function parseInfluencerShipment(page: Record<string, unknown>): InfluencerShipm
     expectedDeliveryDate: getDate(props["Expected Delivery"]),
     deliveredDate: getDate(props["Delivered Date"]),
     receiverName: getText(props["Receiver Name"]),
+    reasonCode: getText(props["Reason Code"]),
+    reasonDesc: getText(props["Reason Description"]),
+    attemptCount: (props["Attempt Count"] as { number?: number | null } | undefined)?.number ?? 0,
+    destinationPincode: getText(props["Destination Pincode"]),
+    workerMobile: getText(props["Worker Mobile"]),
     lastUpdated: getDate(props["Last Updated"]),
     trackingTimeline: timeline,
     createdAt: getDate(props["Created At"]),
@@ -467,10 +510,12 @@ export const notionProvider: DataProvider = {
 
     if (existing.length > 0) {
       const pageId = (existing[0] as { id: string }).id;
-      // Don't overwrite delivery status, COD collection status, and tracking data on re-sync
+      // Don't overwrite these fields on re-sync — they are managed by other flows
       const updateProps = { ...properties };
       delete updateProps["Delivery Status"];
       delete updateProps["COD Collection Status"];
+      delete updateProps["WhatsApp Sent"];
+      delete updateProps["COD Confirmed"];
       const res = await fetch(`${NOTION_API}/pages/${pageId}`, {
         method: "PATCH",
         headers: headers(),
@@ -502,16 +547,24 @@ export const notionProvider: DataProvider = {
       deliveredDate: string;
       deliveredTimestamp: string;
       receiverName: string;
+      rtoNumber: string;
+      reasonCode: string;
+      reasonDesc: string;
+      attemptCount: number;
+      destinationPincode: string;
+      workerMobile: string;
       lastUpdated: string;
       trackingTimeline: TrackingEvent[];
     },
     knownPageId?: string
   ): Promise<void> {
+    const dbId = await getDatabaseId();
+    await ensureDtdcFieldProperties(dbId, false);
+
     let pageId = knownPageId;
 
     if (!pageId) {
-      const databaseId = await getDatabaseId();
-      const existing = await queryDatabase(databaseId, {
+      const existing = await queryDatabase(dbId, {
         property: "Tracking Number",
         rich_text: { equals: trackingNumber },
       });
@@ -531,11 +584,31 @@ export const notionProvider: DataProvider = {
       "Receiver Name": {
         rich_text: [{ text: { content: data.receiverName } }],
       },
+      "Reason Code": {
+        rich_text: [{ text: { content: data.reasonCode } }],
+      },
+      "Reason Description": {
+        rich_text: [{ text: { content: data.reasonDesc } }],
+      },
+      "Attempt Count": { number: data.attemptCount || null },
+      "Destination Pincode": {
+        rich_text: [{ text: { content: data.destinationPincode } }],
+      },
+      "Worker Mobile": {
+        rich_text: [{ text: { content: data.workerMobile } }],
+      },
       "Last Updated": { date: { start: data.lastUpdated } },
       "Tracking Timeline": {
         rich_text: toRichTextBlocks(timelineStr),
       },
     };
+
+    // Auto-populate RTO tracking number from DTDC if provided
+    if (data.rtoNumber) {
+      properties["RTO Tracking Number"] = {
+        rich_text: [{ text: { content: data.rtoNumber } }],
+      };
+    }
 
     if (data.expectedDeliveryDate) {
       properties["Expected Delivery"] = {
@@ -813,6 +886,69 @@ export const notionProvider: DataProvider = {
     }
   },
 
+  async markWhatsAppSent(orderId: string, isCod: boolean): Promise<void> {
+    if (!whatsappPropertyCreated) {
+      const databaseId = await getDatabaseId();
+      const schemaRes = await fetch(`${NOTION_API}/databases/${databaseId}`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({
+          properties: {
+            "WhatsApp Sent": { checkbox: {} },
+            "COD Confirmed": {
+              select: {
+                options: [
+                  { name: "Confirmed on Call", color: "green" },
+                  { name: "Confirmed on WhatsApp", color: "blue" },
+                  { name: "Declined", color: "red" },
+                  { name: "No Reply", color: "gray" },
+                ],
+              },
+            },
+          },
+        }),
+      });
+      if (!schemaRes.ok) {
+        const body = await schemaRes.text();
+        console.error(`Failed to create WhatsApp schema properties: ${schemaRes.status}`, body);
+        throw new Error(`Notion schema update failed: ${schemaRes.status}`);
+      }
+      whatsappPropertyCreated = true;
+    }
+
+    const properties: Record<string, unknown> = {
+      "WhatsApp Sent": { checkbox: true },
+    };
+
+    const res = await fetch(`${NOTION_API}/pages/${orderId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({ properties }),
+    });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`Notion markWhatsAppSent failed for ${orderId}: ${res.status}`, errorBody);
+      throw new Error(`Notion update failed: ${res.status}`);
+    }
+  },
+
+  async updateCodConfirmation(orderId: string, status: "Confirmed on Call" | "Confirmed on WhatsApp" | "Declined" | "No Reply"): Promise<void> {
+    const res = await fetch(`${NOTION_API}/pages/${orderId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: {
+          "COD Confirmed": { select: { name: status } },
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`Notion updateCodConfirmation failed for ${orderId}: ${res.status}`, errorBody);
+      throw new Error(`Notion update failed: ${res.status}`);
+    }
+  },
+
   // Influencer Shipments
   async getInfluencerShipments(): Promise<InfluencerShipment[]> {
     const databaseId = await getInfluencerDatabaseId();
@@ -904,11 +1040,17 @@ export const notionProvider: DataProvider = {
       expectedDeliveryDate: string;
       deliveredDate: string;
       receiverName: string;
+      reasonCode: string;
+      reasonDesc: string;
+      attemptCount: number;
+      destinationPincode: string;
+      workerMobile: string;
       lastUpdated: string;
       trackingTimeline: TrackingEvent[];
     }
   ): Promise<void> {
     const databaseId = await getInfluencerDatabaseId();
+    await ensureDtdcFieldProperties(databaseId, true);
 
     const existing = await queryDatabase(databaseId, {
       property: "Tracking Number",
@@ -930,6 +1072,19 @@ export const notionProvider: DataProvider = {
       },
       "Receiver Name": {
         rich_text: [{ text: { content: data.receiverName } }],
+      },
+      "Reason Code": {
+        rich_text: [{ text: { content: data.reasonCode } }],
+      },
+      "Reason Description": {
+        rich_text: [{ text: { content: data.reasonDesc } }],
+      },
+      "Attempt Count": { number: data.attemptCount || null },
+      "Destination Pincode": {
+        rich_text: [{ text: { content: data.destinationPincode } }],
+      },
+      "Worker Mobile": {
+        rich_text: [{ text: { content: data.workerMobile } }],
       },
       "Last Updated": { date: { start: data.lastUpdated } },
       "Tracking Timeline": {

@@ -70,11 +70,18 @@ export async function POST() {
         lastUpdated: new Date().toISOString().split("T")[0],
         trackingTimeline: [],
         rtoTrackingNumber: "",
+        reasonCode: "",
+        reasonDesc: "",
+        attemptCount: 0,
+        destinationPincode: "",
+        workerMobile: "",
         deliveryEmailSent: false,
         reviewEmailSent: false,
         shippingMode: isCOD ? "Road" : "Air",
         weightGrams: 0,
         cancellationReason: "",
+        whatsappSent: false,
+        codConfirmationStatus: "",
       });
       synced++;
     }
@@ -125,11 +132,18 @@ export async function POST() {
         lastUpdated: new Date().toISOString().split("T")[0],
         trackingTimeline: [],
         rtoTrackingNumber: "",
+        reasonCode: "",
+        reasonDesc: "",
+        attemptCount: 0,
+        destinationPincode: "",
+        workerMobile: "",
         deliveryEmailSent: false,
         reviewEmailSent: false,
         shippingMode: isCOD ? "Road" : "Air",
         weightGrams: 0,
         cancellationReason: "",
+        whatsappSent: false,
+        codConfirmationStatus: "",
       });
       unfulfilled++;
     }

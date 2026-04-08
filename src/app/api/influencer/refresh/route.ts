@@ -31,6 +31,11 @@ export async function POST() {
           expectedDeliveryDate: result.expectedDeliveryDate,
           deliveredDate: result.deliveredDate,
           receiverName: result.receiverName,
+          reasonCode: result.reasonCode,
+          reasonDesc: result.reasonDesc,
+          attemptCount: result.attemptCount,
+          destinationPincode: result.destinationPincode,
+          workerMobile: result.workerMobile,
           lastUpdated: new Date().toISOString().split("T")[0],
           trackingTimeline: result.timeline,
         });
