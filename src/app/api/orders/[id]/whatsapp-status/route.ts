@@ -67,3 +67,29 @@ export async function PATCH(
     );
   }
 }
+
+export async function PUT(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    if (!NOTION_ID_REGEX.test(id)) {
+      return NextResponse.json(
+        { success: false, error: "Invalid order ID" },
+        { status: 400 }
+      );
+    }
+    await data.recordWhatsAppFollowUp(id);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Record WhatsApp follow-up error:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
+  }
+}

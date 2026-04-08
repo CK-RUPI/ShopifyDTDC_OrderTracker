@@ -66,6 +66,8 @@ export interface Order {
   cancellationReason: string;
   whatsappSent: boolean;
   codConfirmationStatus: CodConfirmationStatus;
+  whatsappFollowUpCount: number;
+  whatsappLastFollowUpDate: string;
 }
 
 export interface Product {
@@ -171,6 +173,7 @@ export interface DataProvider {
   cancelOrder(orderId: string, reason: string): Promise<void>;
   markWhatsAppSent(orderId: string, isCod: boolean): Promise<void>;
   updateCodConfirmation(orderId: string, status: "Confirmed on Call" | "Confirmed on WhatsApp" | "Declined" | "No Reply"): Promise<void>;
+  recordWhatsAppFollowUp(orderId: string): Promise<void>;
   getOrderById(orderId: string): Promise<Order | null>;
   // Influencer shipments
   getInfluencerShipments(): Promise<InfluencerShipment[]>;

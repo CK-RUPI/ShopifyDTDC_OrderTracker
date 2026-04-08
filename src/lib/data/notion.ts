@@ -29,6 +29,7 @@ let cancelReasonPropertyCreated = false;
 let whatsappPropertyCreated = false;
 let dtdcFieldsPropertyCreated = false;
 let dtdcFieldsInfluencerCreated = false;
+let followUpPropertyCreated = false;
 
 async function ensureDtdcFieldProperties(databaseId: string, isInfluencer: boolean) {
   const flag = isInfluencer ? dtdcFieldsInfluencerCreated : dtdcFieldsPropertyCreated;
@@ -252,6 +253,8 @@ function parseOrder(page: Record<string, unknown>): Order {
     cancellationReason: getText(props["Cancellation Reason"]),
     whatsappSent: getCheckbox(props["WhatsApp Sent"]),
     codConfirmationStatus: (getSelect(props["COD Confirmed"]) || "") as CodConfirmationStatus,
+    whatsappFollowUpCount: (props["WhatsApp Follow-Up Count"] as { number?: number | null } | undefined)?.number ?? 0,
+    whatsappLastFollowUpDate: getText(props["WhatsApp Last Follow-Up"]),
   };
 }
 
@@ -918,6 +921,7 @@ export const notionProvider: DataProvider = {
 
     const properties: Record<string, unknown> = {
       "WhatsApp Sent": { checkbox: true },
+      "COD Confirmed": { select: { name: "No Reply" } },
     };
 
     const res = await fetch(`${NOTION_API}/pages/${orderId}`, {
@@ -945,6 +949,50 @@ export const notionProvider: DataProvider = {
     if (!res.ok) {
       const errorBody = await res.text();
       console.error(`Notion updateCodConfirmation failed for ${orderId}: ${res.status}`, errorBody);
+      throw new Error(`Notion update failed: ${res.status}`);
+    }
+  },
+
+  async recordWhatsAppFollowUp(orderId: string): Promise<void> {
+    if (!followUpPropertyCreated) {
+      const databaseId = await getDatabaseId();
+      const schemaRes = await fetch(`${NOTION_API}/databases/${databaseId}`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({
+          properties: {
+            "WhatsApp Follow-Up Count": { number: {} },
+            "WhatsApp Last Follow-Up": { rich_text: {} },
+          },
+        }),
+      });
+      if (!schemaRes.ok) {
+        const body = await schemaRes.text();
+        console.error(`Failed to create follow-up schema properties: ${schemaRes.status}`, body);
+        throw new Error(`Notion schema update failed: ${schemaRes.status}`);
+      }
+      followUpPropertyCreated = true;
+    }
+
+    // Read current count
+    const page = await this.getOrderById(orderId);
+    const currentCount = page?.whatsappFollowUpCount || 0;
+
+    const res = await fetch(`${NOTION_API}/pages/${orderId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: {
+          "WhatsApp Follow-Up Count": { number: currentCount + 1 },
+          "WhatsApp Last Follow-Up": {
+            rich_text: [{ text: { content: new Date().toISOString() } }],
+          },
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`Notion recordWhatsAppFollowUp failed for ${orderId}: ${res.status}`, errorBody);
       throw new Error(`Notion update failed: ${res.status}`);
     }
   },

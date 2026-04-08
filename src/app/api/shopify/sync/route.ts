@@ -82,6 +82,8 @@ export async function POST() {
         cancellationReason: "",
         whatsappSent: false,
         codConfirmationStatus: "",
+        whatsappFollowUpCount: 0,
+        whatsappLastFollowUpDate: "",
       });
       synced++;
     }
@@ -144,6 +146,8 @@ export async function POST() {
         cancellationReason: "",
         whatsappSent: false,
         codConfirmationStatus: "",
+        whatsappFollowUpCount: 0,
+        whatsappLastFollowUpDate: "",
       });
       unfulfilled++;
     }
