@@ -21,6 +21,8 @@ export type EmailType = "delivery_confirmation" | "review_request";
 
 export type CodConfirmationStatus = "Confirmed on Call" | "Confirmed on WhatsApp" | "Declined" | "No Reply" | "";
 
+export type RtoConfirmationStatus = "Reachable" | "Cancel" | "No Reply" | "";
+
 export interface TrackingEvent {
   timestamp: string;
   status: string;
@@ -68,6 +70,10 @@ export interface Order {
   codConfirmationStatus: CodConfirmationStatus;
   whatsappFollowUpCount: number;
   whatsappLastFollowUpDate: string;
+  rtoWhatsappSent: boolean;
+  rtoConfirmationStatus: RtoConfirmationStatus;
+  rtoFollowUpCount: number;
+  rtoLastFollowUpDate: string;
 }
 
 export interface Product {
@@ -174,6 +180,9 @@ export interface DataProvider {
   markWhatsAppSent(orderId: string, isCod: boolean): Promise<void>;
   updateCodConfirmation(orderId: string, status: "Confirmed on Call" | "Confirmed on WhatsApp" | "Declined" | "No Reply"): Promise<void>;
   recordWhatsAppFollowUp(orderId: string): Promise<void>;
+  markRtoWhatsAppSent(orderId: string): Promise<void>;
+  updateRtoConfirmation(orderId: string, status: "Reachable" | "Cancel" | "No Reply"): Promise<void>;
+  recordRtoFollowUp(orderId: string): Promise<void>;
   getOrderById(orderId: string): Promise<Order | null>;
   // Influencer shipments
   getInfluencerShipments(): Promise<InfluencerShipment[]>;

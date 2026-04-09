@@ -84,6 +84,10 @@ export async function POST() {
         codConfirmationStatus: "",
         whatsappFollowUpCount: 0,
         whatsappLastFollowUpDate: "",
+        rtoWhatsappSent: false,
+        rtoConfirmationStatus: "",
+        rtoFollowUpCount: 0,
+        rtoLastFollowUpDate: "",
       });
       synced++;
     }
@@ -148,6 +152,10 @@ export async function POST() {
         codConfirmationStatus: "",
         whatsappFollowUpCount: 0,
         whatsappLastFollowUpDate: "",
+        rtoWhatsappSent: false,
+        rtoConfirmationStatus: "",
+        rtoFollowUpCount: 0,
+        rtoLastFollowUpDate: "",
       });
       unfulfilled++;
     }

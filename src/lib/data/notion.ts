@@ -7,6 +7,7 @@ import {
   InfluencerShipment,
   Product,
   CodConfirmationStatus,
+  RtoConfirmationStatus,
 } from "./types";
 
 const NOTION_API = "https://api.notion.com/v1";
@@ -30,6 +31,8 @@ let whatsappPropertyCreated = false;
 let dtdcFieldsPropertyCreated = false;
 let dtdcFieldsInfluencerCreated = false;
 let followUpPropertyCreated = false;
+let rtoWhatsappPropertyCreated = false;
+let rtoFollowUpPropertyCreated = false;
 
 async function ensureDtdcFieldProperties(databaseId: string, isInfluencer: boolean) {
   const flag = isInfluencer ? dtdcFieldsInfluencerCreated : dtdcFieldsPropertyCreated;
@@ -255,6 +258,10 @@ function parseOrder(page: Record<string, unknown>): Order {
     codConfirmationStatus: (getSelect(props["COD Confirmed"]) || "") as CodConfirmationStatus,
     whatsappFollowUpCount: (props["WhatsApp Follow-Up Count"] as { number?: number | null } | undefined)?.number ?? 0,
     whatsappLastFollowUpDate: getText(props["WhatsApp Last Follow-Up"]),
+    rtoWhatsappSent: getCheckbox(props["RTO WhatsApp Sent"]),
+    rtoConfirmationStatus: (getSelect(props["RTO Confirmed Status"]) || "") as RtoConfirmationStatus,
+    rtoFollowUpCount: (props["RTO Follow-Up Count"] as { number?: number | null } | undefined)?.number ?? 0,
+    rtoLastFollowUpDate: getText(props["RTO Last Follow-Up"]),
   };
 }
 
@@ -519,6 +526,8 @@ export const notionProvider: DataProvider = {
       delete updateProps["COD Collection Status"];
       delete updateProps["WhatsApp Sent"];
       delete updateProps["COD Confirmed"];
+      delete updateProps["RTO WhatsApp Sent"];
+      delete updateProps["RTO Confirmed Status"];
       const res = await fetch(`${NOTION_API}/pages/${pageId}`, {
         method: "PATCH",
         headers: headers(),
@@ -993,6 +1002,112 @@ export const notionProvider: DataProvider = {
     if (!res.ok) {
       const errorBody = await res.text();
       console.error(`Notion recordWhatsAppFollowUp failed for ${orderId}: ${res.status}`, errorBody);
+      throw new Error(`Notion update failed: ${res.status}`);
+    }
+  },
+
+  async markRtoWhatsAppSent(orderId: string): Promise<void> {
+    if (!rtoWhatsappPropertyCreated) {
+      const databaseId = await getDatabaseId();
+      const schemaRes = await fetch(`${NOTION_API}/databases/${databaseId}`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({
+          properties: {
+            "RTO WhatsApp Sent": { checkbox: {} },
+            "RTO Confirmed Status": {
+              select: {
+                options: [
+                  { name: "Reachable", color: "green" },
+                  { name: "Cancel", color: "red" },
+                  { name: "No Reply", color: "gray" },
+                ],
+              },
+            },
+          },
+        }),
+      });
+      if (!schemaRes.ok) {
+        const body = await schemaRes.text();
+        console.error(`Failed to create RTO WhatsApp schema properties: ${schemaRes.status}`, body);
+        throw new Error(`Notion schema update failed: ${schemaRes.status}`);
+      }
+      rtoWhatsappPropertyCreated = true;
+    }
+
+    const res = await fetch(`${NOTION_API}/pages/${orderId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: {
+          "RTO WhatsApp Sent": { checkbox: true },
+          "RTO Confirmed Status": { select: { name: "No Reply" } },
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`Notion markRtoWhatsAppSent failed for ${orderId}: ${res.status}`, errorBody);
+      throw new Error(`Notion update failed: ${res.status}`);
+    }
+  },
+
+  async updateRtoConfirmation(orderId: string, status: "Reachable" | "Cancel" | "No Reply"): Promise<void> {
+    const res = await fetch(`${NOTION_API}/pages/${orderId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: {
+          "RTO Confirmed Status": { select: { name: status } },
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`Notion updateRtoConfirmation failed for ${orderId}: ${res.status}`, errorBody);
+      throw new Error(`Notion update failed: ${res.status}`);
+    }
+  },
+
+  async recordRtoFollowUp(orderId: string): Promise<void> {
+    if (!rtoFollowUpPropertyCreated) {
+      const databaseId = await getDatabaseId();
+      const schemaRes = await fetch(`${NOTION_API}/databases/${databaseId}`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({
+          properties: {
+            "RTO Follow-Up Count": { number: {} },
+            "RTO Last Follow-Up": { rich_text: {} },
+          },
+        }),
+      });
+      if (!schemaRes.ok) {
+        const body = await schemaRes.text();
+        console.error(`Failed to create RTO follow-up schema properties: ${schemaRes.status}`, body);
+        throw new Error(`Notion schema update failed: ${schemaRes.status}`);
+      }
+      rtoFollowUpPropertyCreated = true;
+    }
+
+    const page = await this.getOrderById(orderId);
+    const currentCount = page?.rtoFollowUpCount || 0;
+
+    const res = await fetch(`${NOTION_API}/pages/${orderId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: {
+          "RTO Follow-Up Count": { number: currentCount + 1 },
+          "RTO Last Follow-Up": {
+            rich_text: [{ text: { content: new Date().toISOString() } }],
+          },
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`Notion recordRtoFollowUp failed for ${orderId}: ${res.status}`, errorBody);
       throw new Error(`Notion update failed: ${res.status}`);
     }
   },
