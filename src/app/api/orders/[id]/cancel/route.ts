@@ -28,18 +28,28 @@ export async function POST(
       );
     }
 
+    if (!order.shopifyOrderId) {
+      return NextResponse.json(
+        { success: false, error: "Order has no Shopify Order ID" },
+        { status: 400 }
+      );
+    }
+
     // Cancel on Shopify
     try {
-      await cancelShopifyOrder(order.shopifyOrderId);
+      await cancelShopifyOrder(order.shopifyOrderId, reason);
     } catch (shopifyError) {
-      console.error("Shopify cancellation failed:", shopifyError);
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Shopify cancellation failed: ${shopifyError instanceof Error ? shopifyError.message : "Unknown error"}`,
-        },
-        { status: 502 }
-      );
+      const msg = shopifyError instanceof Error ? shopifyError.message : "Unknown error";
+      // 404 = order already cancelled or doesn't exist on Shopify — proceed to update Notion
+      if (msg.includes("(404)")) {
+        console.warn("Shopify order not found (may already be cancelled), proceeding with Notion update");
+      } else {
+        console.error("Shopify cancellation failed:", shopifyError);
+        return NextResponse.json(
+          { success: false, error: `Shopify cancellation failed: ${msg}` },
+          { status: 502 }
+        );
+      }
     }
 
     // Update Notion

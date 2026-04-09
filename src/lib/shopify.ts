@@ -225,10 +225,17 @@ export async function getOrderLineItems(
   }));
 }
 
-export async function cancelShopifyOrder(shopifyOrderId: string): Promise<void> {
+export async function cancelShopifyOrder(shopifyOrderId: string, reason?: string): Promise<void> {
+  // Add cancellation reason as order note before cancelling
+  if (reason) {
+    await shopifyFetch(`/orders/${shopifyOrderId}.json`, {
+      method: "PUT",
+      body: { order: { id: Number(shopifyOrderId), note: `Cancellation reason: ${reason}` } },
+    });
+  }
   await shopifyFetch(`/orders/${shopifyOrderId}/cancel.json`, {
     method: "POST",
-    body: { reason: "other", email: false },
+    body: { reason: "other", email: true },
   });
 }
 
