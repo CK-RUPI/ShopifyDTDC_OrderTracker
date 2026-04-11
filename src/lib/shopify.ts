@@ -177,7 +177,57 @@ export async function createShopifyFulfillment(
     .filter((fo) => fo.fulfillment_order_line_items.length > 0);
 
   if (lineItemsByFulfillmentOrder.length === 0) {
-    const debug = fulfillmentOrders.map((fo) => ({
+    await updateExistingFulfillmentTracking(
+      shopifyOrderId,
+      trackingNumber,
+      courierPartner,
+      fulfillmentOrders
+    );
+    return;
+  }
+
+  await shopifyFetch("/fulfillments.json", {
+    method: "POST",
+    body: {
+      fulfillment: {
+        notify_customer: true,
+        line_items_by_fulfillment_order: lineItemsByFulfillmentOrder,
+        tracking_info: {
+          number: trackingNumber,
+          company: courierPartner || "DTDC",
+        },
+      },
+    },
+  });
+}
+
+async function updateExistingFulfillmentTracking(
+  shopifyOrderId: string,
+  trackingNumber: string,
+  courierPartner: string,
+  fulfillmentOrdersForDebug: Array<{
+    id: number;
+    status: string;
+    line_items: Array<{ id: number; quantity: number; fulfillable_quantity: number }>;
+  }>
+): Promise<void> {
+  const fData = (await shopifyFetch(
+    `/orders/${shopifyOrderId}/fulfillments.json`
+  )) as {
+    fulfillments: Array<{
+      id: number;
+      status: string;
+      tracking_number: string | null;
+    }>;
+  };
+
+  const fulfillments = fData.fulfillments || [];
+  const target =
+    fulfillments.find((f) => f.status === "success") ||
+    fulfillments[fulfillments.length - 1];
+
+  if (!target) {
+    const debug = fulfillmentOrdersForDebug.map((fo) => ({
       id: fo.id,
       status: fo.status,
       items: fo.line_items.map((li) => ({
@@ -187,16 +237,18 @@ export async function createShopifyFulfillment(
       })),
     }));
     throw new Error(
-      `No fulfillable items found. Fulfillment orders: ${JSON.stringify(debug)}`
+      `No fulfillable items and no existing fulfillment to update. Fulfillment orders: ${JSON.stringify(debug)}`
     );
   }
 
-  await shopifyFetch("/fulfillments.json", {
+  // Recovery path: Shopify already fulfilled this order (and likely already
+  // emailed the customer the first time). Update tracking silently — do NOT
+  // resend the shipping email.
+  await shopifyFetch(`/fulfillments/${target.id}/update_tracking.json`, {
     method: "POST",
     body: {
       fulfillment: {
-        notify_customer: true,
-        line_items_by_fulfillment_order: lineItemsByFulfillmentOrder,
+        notify_customer: false,
         tracking_info: {
           number: trackingNumber,
           company: courierPartner || "DTDC",

@@ -983,26 +983,76 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays, shippingCo
     }
   };
 
-  const handleAssignTracking = async (orderId: string) => {
-    const trackingNum = trackingInputs[orderId];
-    if (!trackingNum?.trim()) return;
+  const handleAssignTracking = async (order: Order) => {
+    const orderId = order.id;
+    const rawTracking = trackingInputs[orderId];
+    if (!rawTracking?.trim()) return;
+    const trackingNum = rawTracking.trim();
+
+    // Reserve a blank tab synchronously so browsers don't popup-block the
+    // later window.open (after the await, user-gesture context is lost).
+    const waTab = order.customerPhone ? window.open("about:blank") : null;
+
     setActionLoading(`assign-${orderId}`);
     try {
       const res = await fetch(`/api/orders/${orderId}/assign-tracking`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          trackingNumber: trackingNum.trim(),
+          trackingNumber: trackingNum,
           courierPartner: "DTDC",
         }),
       });
       const result = await res.json();
       if (!result.success) {
         alert(`Failed: ${result.error}`);
+        waTab?.close();
         return;
       }
       setTrackingInputs((prev) => ({ ...prev, [orderId]: "" }));
+
+      if (waTab && order.customerPhone) {
+        let phone = order.customerPhone.replace(/\D/g, "");
+        if (phone.length === 10) phone = `91${phone}`;
+        const firstName = order.customerName.split(" ")[0];
+
+        const E = {
+          pkg: String.fromCodePoint(0x1F4E6),
+          truck: String.fromCodePoint(0x1F69A),
+          link: String.fromCodePoint(0x1F517),
+          sparkles: String.fromCodePoint(0x2728),
+          heart: String.fromCodePoint(0x1F49C),
+        };
+
+        const zwspTracking = trackingNum.split("").join("\u200B");
+        const trackingLink = `https://txk.dtdc.com/ctbs-tracking/customerInterface.tr?submitName=showCITrackingDetails&cType=Consignment&cnNo=${trackingNum}`;
+
+        const message = `Hi ${firstName}! ${E.pkg}
+
+Great news \u2014 your *UrbanNaari* order is on its way! ${E.truck}
+
+*Tracking Number:* ${zwspTracking}
+${E.link} *Track here:* ${trackingLink}
+
+You'll receive your parcel in 4\u20137 business days. ${E.sparkles}
+
+We hope you love what you've picked ${String.fromCodePoint(0x1F457)} \u2014 can't wait to see you style it!
+
+Thank you for shopping with us! ${E.heart}
+-- Team UrbanNaari`;
+
+        const waUrl = new URL("https://web.whatsapp.com/send");
+        waUrl.searchParams.set("phone", phone);
+        waUrl.searchParams.set("text", message);
+        waTab.location.href = waUrl.toString();
+      } else {
+        waTab?.close();
+      }
+
       onOrderUpdated?.();
+    } catch (err) {
+      waTab?.close();
+      throw err;
     } finally {
       setActionLoading(null);
     }
@@ -1467,7 +1517,7 @@ Thank you! ${E.heart}
                                 }
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleAssignTracking(order.id);
+                                  handleAssignTracking(order);
                                 }}
                               >
                                 {actionLoading === `assign-${order.id}` ? (

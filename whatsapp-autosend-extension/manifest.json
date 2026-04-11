@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "UrbanNaari WhatsApp Auto-Send",
+  "version": "1.0.0",
+  "description": "Auto-clicks the Send button on web.whatsapp.com/send links opened by the Urban Naari Order Tracker.",
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
