@@ -899,6 +899,7 @@ export const notionProvider: DataProvider = {
   },
 
   async markWhatsAppSent(orderId: string, isCod: boolean): Promise<void> {
+    void isCod;
     if (!whatsappPropertyCreated) {
       const databaseId = await getDatabaseId();
       const schemaRes = await fetch(`${NOTION_API}/databases/${databaseId}`, {
@@ -923,25 +924,51 @@ export const notionProvider: DataProvider = {
       if (!schemaRes.ok) {
         const body = await schemaRes.text();
         console.error(`Failed to create WhatsApp schema properties: ${schemaRes.status}`, body);
-        throw new Error(`Notion schema update failed: ${schemaRes.status}`);
+        // Do NOT throw — the WhatsApp Sent checkbox may already exist and
+        // the COD Confirmed field may just be in a non-select shape. Try the
+        // write with WhatsApp Sent alone below.
+      } else {
+        whatsappPropertyCreated = true;
       }
-      whatsappPropertyCreated = true;
     }
 
-    const properties: Record<string, unknown> = {
+    // First try writing both fields. If Notion rejects (e.g. COD Confirmed has
+    // the wrong property type), retry with just WhatsApp Sent so the dashboard
+    // still reflects the action.
+    const fullProps: Record<string, unknown> = {
       "WhatsApp Sent": { checkbox: true },
       "COD Confirmed": { select: { name: "No Reply" } },
     };
 
-    const res = await fetch(`${NOTION_API}/pages/${orderId}`, {
+    const fullRes = await fetch(`${NOTION_API}/pages/${orderId}`, {
       method: "PATCH",
       headers: headers(),
-      body: JSON.stringify({ properties }),
+      body: JSON.stringify({ properties: fullProps }),
     });
-    if (!res.ok) {
-      const errorBody = await res.text();
-      console.error(`Notion markWhatsAppSent failed for ${orderId}: ${res.status}`, errorBody);
-      throw new Error(`Notion update failed: ${res.status}`);
+    if (fullRes.ok) return;
+
+    const fullBody = await fullRes.text();
+    console.error(
+      `Notion markWhatsAppSent (full) failed for ${orderId}: ${fullRes.status}`,
+      fullBody
+    );
+
+    const fallbackRes = await fetch(`${NOTION_API}/pages/${orderId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: { "WhatsApp Sent": { checkbox: true } },
+      }),
+    });
+    if (!fallbackRes.ok) {
+      const fbBody = await fallbackRes.text();
+      console.error(
+        `Notion markWhatsAppSent (fallback) failed for ${orderId}: ${fallbackRes.status}`,
+        fbBody
+      );
+      throw new Error(
+        `Notion update failed: ${fullRes.status} / fallback ${fallbackRes.status} — ${fbBody.slice(0, 200)}`
+      );
     }
   },
 
@@ -978,7 +1005,7 @@ export const notionProvider: DataProvider = {
       if (!schemaRes.ok) {
         const body = await schemaRes.text();
         console.error(`Failed to create follow-up schema properties: ${schemaRes.status}`, body);
-        throw new Error(`Notion schema update failed: ${schemaRes.status}`);
+        throw new Error(`Notion schema update failed: ${schemaRes.status} — ${body.slice(0, 200)}`);
       }
       followUpPropertyCreated = true;
     }
