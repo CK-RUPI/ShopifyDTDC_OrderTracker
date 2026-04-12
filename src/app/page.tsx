@@ -79,6 +79,77 @@ const DEFAULT_DELAYED_THRESHOLD_DAYS = 7;
 type Tab = "orders" | "influencer" | "analytics";
 
 // --- UTILITY FUNCTIONS ---
+function normalizeWhatsAppPhone(raw: string): string {
+  let phone = raw.replace(/\D/g, "");
+  if (phone.length === 10) phone = `91${phone}`;
+  return phone;
+}
+
+function buildWhatsAppUrl(phone: string, message: string): string {
+  const url = new URL("https://web.whatsapp.com/send");
+  url.searchParams.set("phone", phone);
+  url.searchParams.set("text", message);
+  return url.toString();
+}
+
+function buildCodConfirmationMessage(order: Order, itemsText: string): string {
+  const firstName = order.customerName.split(" ")[0];
+  const E = {
+    wave: String.fromCodePoint(0x1F44B),
+    bag: String.fromCodePoint(0x1F6CD, 0xFE0F),
+    pin: String.fromCodePoint(0x1F4CD),
+    check: String.fromCodePoint(0x2705),
+    heart: String.fromCodePoint(0x1F49C),
+    hanger: String.fromCodePoint(0x1F45A),
+  };
+  return `Hi ${firstName}! ${E.wave}
+
+Thank you for your order from *UrbanNaari*! ${E.bag}
+
+Before we ship, we'd love to quickly confirm a couple of details:
+
+${E.hanger} *Items Ordered:*
+${itemsText || "(could not load items)"}
+
+${E.pin} *Delivery Address:*
+${order.shippingAddress}
+
+Please confirm:
+${E.check} Are the items and sizes correct?
+${E.check} Is the delivery address correct?
+
+Just reply *"Yes"* if everything looks good, or let us know the changes needed.
+
+Thank you! ${E.heart}
+-- Team UrbanNaari`;
+}
+
+async function fetchLineItemsText(orderId: string): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/orders/${orderId}/line-items`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.lineItems) return null;
+    return data.lineItems
+      .map((li: { title: string; quantity: number; variantTitle: string }) => {
+        const size = li.variantTitle ? ` (${li.variantTitle})` : "";
+        return `- ${li.title}${size} x ${li.quantity}`;
+      })
+      .join("\n");
+  } catch {
+    return null;
+  }
+}
+
+function isPendingCodConfirmation(order: Order): boolean {
+  return (
+    order.paymentMethod === "COD" &&
+    order.deliveryStatus === "Unfulfilled" &&
+    !order.whatsappSent &&
+    !!order.customerPhone
+  );
+}
+
 function isDelayed(order: Order, thresholdDays: number): boolean {
   const excludedStatuses: string[] = [
     "Delivered",
@@ -1099,48 +1170,10 @@ Thank you for shopping with us! ${E.heart}
   };
 
   const handleWhatsAppConfirmation = async (order: Order) => {
-    let phone = order.customerPhone.replace(/\D/g, "");
-    if (phone.length === 10) phone = `91${phone}`;
-    const firstName = order.customerName.split(" ")[0];
-
-    // Use cached line items (pre-fetched on row expand)
+    const phone = normalizeWhatsAppPhone(order.customerPhone);
     const itemsText = cachedLineItems[order.id] || "";
-
-    // Generate emojis from code points to avoid file encoding issues
-    const E = {
-      wave: String.fromCodePoint(0x1F44B),
-      bag: String.fromCodePoint(0x1F6CD, 0xFE0F),
-      pin: String.fromCodePoint(0x1F4CD),
-      check: String.fromCodePoint(0x2705),
-      heart: String.fromCodePoint(0x1F49C),
-      hanger: String.fromCodePoint(0x1F45A),
-    };
-
-    const message = `Hi ${firstName}! ${E.wave}
-
-Thank you for your order from *UrbanNaari*! ${E.bag}
-
-Before we ship, we'd love to quickly confirm a couple of details:
-
-${E.hanger} *Items Ordered:*
-${itemsText || "(could not load items)"}
-
-${E.pin} *Delivery Address:*
-${order.shippingAddress}
-
-Please confirm:
-${E.check} Are the items and sizes correct?
-${E.check} Is the delivery address correct?
-
-Just reply *"Yes"* if everything looks good, or let us know the changes needed.
-
-Thank you! ${E.heart}
--- Team UrbanNaari`;
-    const url = new URL(`https://web.whatsapp.com/send`);
-    url.searchParams.set("phone", phone);
-    url.searchParams.set("text", message);
-
-    window.open(url.toString());
+    const message = buildCodConfirmationMessage(order, itemsText);
+    window.open(buildWhatsAppUrl(phone, message));
 
     // Mark as WhatsApp sent in Notion
     setActionLoading(`whatsapp-${order.id}`);
@@ -2498,6 +2531,7 @@ export default function DashboardCommandCenter() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingCodBanner, setPendingCodBanner] = useState<Order[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [shippingModeFilter, setShippingModeFilter] = useState("all");
@@ -2585,6 +2619,14 @@ export default function DashboardCommandCenter() {
   }, [fetchOrders]);
 
   const handleSync = async () => {
+    // Reserve tabs synchronously (before any await) for every currently-known
+    // pending COD confirmation, so window.open isn't popup-blocked after the
+    // sync fetch resolves. Mirrors handleAssignTracking pattern.
+    const pendingAtClick = orders.filter(isPendingCodConfirmation);
+    const reservedTabs: Array<{ order: Order; tab: Window | null }> = pendingAtClick.map(
+      (order) => ({ order, tab: window.open("about:blank") })
+    );
+
     setSyncing(true);
     setMessage(null);
     try {
@@ -2596,14 +2638,96 @@ export default function DashboardCommandCenter() {
           text: `Synced ${data.synced} fulfilled + ${data.unfulfilled || 0} unfulfilled orders${data.cancelled ? ` (${data.cancelled} cancelled)` : ""} from Shopify`,
         });
         fetchOrders();
+
+        // Auto-dispatch WhatsApp confirmations via the reserved tabs
+        await dispatchCodConfirmations(reservedTabs);
+
+        // Detect orders newly surfaced by this sync that also need confirmation
+        // (weren't in `orders` state at click time → no reserved tab → surface
+        // a one-click banner instead of popup-blocked opens).
+        try {
+          const params = new URLSearchParams();
+          if (statusFilter && statusFilter !== "all") params.set("status", statusFilter);
+          if (shippingModeFilter && shippingModeFilter !== "all") params.set("shippingMode", shippingModeFilter);
+          if (search) params.set("search", search);
+          if (!showDelivered) params.set("hideDelivered", "true");
+          const freshRes = await fetch(`/api/orders?${params}`);
+          const freshData = await freshRes.json();
+          if (freshData.success) {
+            const knownIds = new Set(pendingAtClick.map((o) => o.id));
+            const newPending = (freshData.orders as Order[]).filter(
+              (o) => isPendingCodConfirmation(o) && !knownIds.has(o.id)
+            );
+            setPendingCodBanner(newPending);
+          }
+        } catch {
+          // Non-fatal — banner just won't show.
+        }
       } else {
         setMessage({ type: "error", text: data.error || "Sync failed" });
+        reservedTabs.forEach(({ tab }) => tab?.close());
       }
     } catch {
       setMessage({ type: "error", text: "Failed to connect to Shopify" });
+      reservedTabs.forEach(({ tab }) => tab?.close());
     } finally {
       setSyncing(false);
     }
+  };
+
+  // Dispatch WhatsApp COD confirmations by pointing reserved blank tabs at
+  // web.whatsapp.com/send URLs — the whatsapp-autosend-extension clicks Send
+  // and auto-closes each tab. Marks each order as whatsappSent in Notion.
+  const dispatchCodConfirmations = async (
+    pairs: Array<{ order: Order; tab: Window | null }>
+  ) => {
+    if (pairs.length === 0) return;
+
+    const results = await Promise.all(
+      pairs.map(async ({ order, tab }) => {
+        if (!tab) return { order, sent: false };
+        const itemsText = await fetchLineItemsText(order.id);
+        if (itemsText === null) {
+          tab.close();
+          return { order, sent: false };
+        }
+        const phone = normalizeWhatsAppPhone(order.customerPhone);
+        const message = buildCodConfirmationMessage(order, itemsText);
+        try {
+          tab.location.href = buildWhatsAppUrl(phone, message);
+        } catch {
+          return { order, sent: false };
+        }
+        return { order, sent: true };
+      })
+    );
+
+    const sent = results.filter((r) => r.sent);
+    if (sent.length === 0) return;
+
+    await Promise.all(
+      sent.map(({ order }) =>
+        fetch(`/api/orders/${order.id}/whatsapp-status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isCod: true }),
+        }).catch((err) => {
+          console.error(`markWhatsAppSent failed for ${order.id}:`, err);
+        })
+      )
+    );
+    fetchOrders();
+  };
+
+  const handleSendPendingCodBanner = async () => {
+    if (pendingCodBanner.length === 0) return;
+    // This click IS a user gesture — safe to window.open directly in a loop.
+    const pairs = pendingCodBanner.map((order) => ({
+      order,
+      tab: window.open("about:blank"),
+    }));
+    setPendingCodBanner([]);
+    await dispatchCodConfirmations(pairs);
   };
 
   const handleRefresh = async () => {
@@ -2843,6 +2967,29 @@ export default function DashboardCommandCenter() {
               <span className="flex-1">{message.text}</span>
               <button
                 onClick={() => setMessage(null)}
+                className="text-zinc-500 hover:text-zinc-300 shrink-0"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Pending COD WhatsApp confirmations banner (new-from-sync fallback) */}
+          {pendingCodBanner.length > 0 && (
+            <div className="flex items-center gap-3 p-3 rounded-lg text-sm border bg-green-500/10 text-green-300 border-green-500/20">
+              <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+              <span className="flex-1">
+                {pendingCodBanner.length} new COD order{pendingCodBanner.length !== 1 ? "s" : ""} need WhatsApp confirmation
+              </span>
+              <Button
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white h-7"
+                onClick={handleSendPendingCodBanner}
+              >
+                Send all
+              </Button>
+              <button
+                onClick={() => setPendingCodBanner([])}
                 className="text-zinc-500 hover:text-zinc-300 shrink-0"
               >
                 <X className="h-3.5 w-3.5" />
