@@ -123,6 +123,29 @@ export interface ShippingRateTable {
   prepaidRoad: ShippingRateSlab[];
 }
 
+export interface AbandonedCheckoutLineItem {
+  title: string;
+  quantity: number;
+  variantTitle: string;
+  price: string;
+  productId: string;
+  variantId: string;
+}
+
+export interface AbandonedCheckout {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  lineItems: AbandonedCheckoutLineItem[];
+  totalPrice: string;
+  checkoutUrl: string;
+  createdAt: string;
+  updatedAt: string;
+  waMessageSent: boolean;
+  waMessageSentAt?: string;
+}
+
 export interface OrderFilters {
   status?: DeliveryStatus;
   search?: string;

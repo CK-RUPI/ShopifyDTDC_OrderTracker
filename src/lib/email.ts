@@ -259,6 +259,7 @@ export async function sendReviewEmail(order: Order): Promise<void> {
 
 export function buildReviewWhatsAppUrl(order: Order): string {
   let phone = order.customerPhone.replace(/\D/g, "");
+  if (phone.length === 11 && phone.startsWith("0")) phone = phone.slice(1);
   if (phone.length === 10) phone = `91${phone}`;
   const message = `Hi ${order.customerName}! Thank you for shopping with Urban Naari. We hope you're loving your order (${order.orderNumber}). We'd really appreciate it if you could share your experience with us — it helps other shoppers too! Leave a review here: https://urbannaari.co.in\n\nThank you! 💕\n— Team Urban Naari`;
   return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;

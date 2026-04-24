@@ -1347,6 +1347,123 @@ export const notionProvider: DataProvider = {
   },
 };
 
+// --- Abandoned Checkouts WA Tracking ---
+
+let cachedAbandonedCheckoutsDbId: string | null = null;
+
+async function getOrCreateAbandonedCheckoutsDbId(): Promise<string> {
+  if (cachedAbandonedCheckoutsDbId) return cachedAbandonedCheckoutsDbId;
+
+  const pageId = process.env.NOTION_PAGE_ID!;
+  const res = await fetch(`${NOTION_API}/blocks/${pageId}/children?page_size=100`, {
+    headers: headers(),
+  });
+  const data = await res.json();
+
+  for (const block of data.results || []) {
+    if (
+      block.type === "child_database" &&
+      block.child_database?.title === "Abandoned Checkouts"
+    ) {
+      cachedAbandonedCheckoutsDbId = block.id;
+      return block.id;
+    }
+  }
+
+  const createRes = await fetch(`${NOTION_API}/databases`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({
+      parent: { type: "page_id", page_id: pageId },
+      title: [{ text: { content: "Abandoned Checkouts" } }],
+      properties: {
+        "Checkout ID": { title: {} },
+        "Customer Name": { rich_text: {} },
+        "Customer Phone": { rich_text: {} },
+        "Total Price": { rich_text: {} },
+        "Checkout URL": { url: {} },
+        "WA Sent": { checkbox: {} },
+        "WA Sent At": { date: {} },
+      },
+    }),
+  });
+
+  if (!createRes.ok) {
+    const err = await createRes.json();
+    throw new Error(`Failed to create Abandoned Checkouts DB: ${err.message || JSON.stringify(err)}`);
+  }
+
+  const created = await createRes.json();
+  cachedAbandonedCheckoutsDbId = created.id;
+  return created.id;
+}
+
+export async function getAbandonedCheckoutWaSentIds(): Promise<Set<string>> {
+  const dbId = await getOrCreateAbandonedCheckoutsDbId();
+  const results = await queryDatabase(dbId, {
+    property: "WA Sent",
+    checkbox: { equals: true },
+  });
+
+  const ids = new Set<string>();
+  for (const page of results) {
+    const props = (page as { properties: Record<string, unknown> }).properties;
+    const titleProp = props["Checkout ID"] as { title?: Array<{ plain_text: string }> } | undefined;
+    const checkoutId = titleProp?.title?.[0]?.plain_text || "";
+    if (checkoutId) ids.add(checkoutId);
+  }
+  return ids;
+}
+
+export async function upsertAbandonedCheckoutWaSent(
+  checkoutId: string,
+  customerName: string,
+  customerPhone: string,
+  totalPrice: string,
+  checkoutUrl: string
+): Promise<void> {
+  const dbId = await getOrCreateAbandonedCheckoutsDbId();
+  const dateOnly = new Date().toISOString().split("T")[0];
+
+  const existing = await queryDatabase(dbId, {
+    property: "Checkout ID",
+    title: { equals: checkoutId },
+  });
+
+  const properties: Record<string, unknown> = {
+    "Checkout ID": { title: [{ text: { content: checkoutId } }] },
+    "Customer Name": { rich_text: [{ text: { content: customerName } }] },
+    "Customer Phone": { rich_text: [{ text: { content: customerPhone } }] },
+    "Total Price": { rich_text: [{ text: { content: totalPrice } }] },
+    "Checkout URL": { url: checkoutUrl || null },
+    "WA Sent": { checkbox: true },
+    "WA Sent At": { date: { start: dateOnly } },
+  };
+
+  if (existing.length > 0) {
+    const notionPageId = (existing[0] as { id: string }).id;
+    const patchRes = await fetch(`${NOTION_API}/pages/${notionPageId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({ properties }),
+    });
+    if (!patchRes.ok) {
+      const errorBody = await patchRes.text();
+      throw new Error(`Notion update failed: ${patchRes.status} — ${errorBody.slice(0, 200)}`);
+    }
+  } else {
+    const postRes = await fetch(`${NOTION_API}/pages`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ parent: { database_id: dbId }, properties }),
+    });
+    if (!postRes.ok) {
+      const errorBody = await postRes.text();
+      throw new Error(`Notion create failed: ${postRes.status} — ${errorBody.slice(0, 200)}`);
+    }
+  }
+}
+
 export async function updateInfluencerStatus(
   shipmentId: string,
   status: string

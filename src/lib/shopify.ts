@@ -1,3 +1,5 @@
+import type { AbandonedCheckout } from "./data/types";
+
 const STORE_URL = process.env.SHOPIFY_STORE_URL!;
 const CLIENT_ID = process.env.SHOPIFY_CLIENT_ID!;
 const CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET!;
@@ -95,6 +97,68 @@ export interface ShopifyOrder {
     tracking_numbers: string[];
     tracking_company: string | null;
   }>;
+}
+
+interface ShopifyCheckoutLineItem {
+  title: string;
+  quantity: number;
+  variant_title: string | null;
+  price: string;
+  product_id: number;
+  variant_id: number;
+}
+
+interface ShopifyCheckout {
+  id: number;
+  email: string | null;
+  phone: string | null;
+  shipping_address: { name: string; phone: string | null } | null;
+  billing_address: { name: string; phone: string | null } | null;
+  line_items: ShopifyCheckoutLineItem[];
+  total_price: string;
+  abandoned_checkout_url: string;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export async function getAbandonedCheckouts(): Promise<AbandonedCheckout[]> {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const data = (await shopifyFetch(
+    `/checkouts.json?updated_at_max=${encodeURIComponent(oneHourAgo)}&updated_at_min=${encodeURIComponent(sevenDaysAgo)}&limit=50`
+  )) as { checkouts: ShopifyCheckout[] };
+
+  return (data.checkouts || [])
+    .filter((c) => c.completed_at === null)
+    .map((c) => ({
+      id: String(c.id),
+      customerName:
+        c.shipping_address?.name ||
+        c.billing_address?.name ||
+        c.email ||
+        "Customer",
+      customerPhone:
+        c.phone ||
+        c.shipping_address?.phone ||
+        c.billing_address?.phone ||
+        "",
+      customerEmail: c.email || "",
+      lineItems: c.line_items.map((li) => ({
+        title: li.title,
+        quantity: li.quantity,
+        variantTitle: li.variant_title || "",
+        price: li.price,
+        productId: String(li.product_id),
+        variantId: String(li.variant_id),
+      })),
+      totalPrice: c.total_price,
+      checkoutUrl: c.abandoned_checkout_url,
+      createdAt: c.created_at,
+      updatedAt: c.updated_at,
+      waMessageSent: false,
+    }));
 }
 
 export async function getFulfilledOrders(updatedAtMin?: string): Promise<ShopifyOrder[]> {
@@ -330,6 +394,26 @@ export async function getProductFromPublicUrl(
       title: product.title || "",
       imageUrl: product.images?.[0]?.src || product.image?.src || "",
     };
+  } catch {
+    return null;
+  }
+}
+
+export async function getShopifyProductImage(
+  productId: string
+): Promise<string | null> {
+  try {
+    const data = (await shopifyFetch(`/products/${productId}.json`)) as {
+      product?: {
+        images?: { src: string }[];
+        image?: { src: string };
+      };
+    };
+    return (
+      data.product?.images?.[0]?.src ||
+      data.product?.image?.src ||
+      null
+    );
   } catch {
     return null;
   }

@@ -7,6 +7,11 @@
     location.pathname === "/send" && params.has("text") && params.has("phone");
   if (!isSendLink) return;
 
+  // Caller can opt out of auto-send by setting autosend=0 in the URL.
+  // Used by the abandoned-cart flow, where the operator pastes a photo first
+  // and manually sends both the photo and the prefilled text.
+  if (params.get("autosend") === "0") return;
+
   const SELECTORS = [
     'button[aria-label="Send"]',
     'button[data-tab="11"]',

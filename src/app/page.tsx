@@ -56,6 +56,7 @@ import {
   Star,
   MessageCircle,
   Download,
+  ShoppingCart,
 } from "lucide-react";
 import {
   Dialog,
@@ -64,6 +65,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { InfluencerSection } from "@/components/InfluencerSection";
+import { AbandonedCheckoutsSection } from "@/components/AbandonedCheckoutsSection";
 import { DTDCExportDialog } from "@/components/DTDCExportDialog";
 import { ShippingExportDialog } from "@/components/ShippingExportDialog";
 import { ShippingRatesPanel } from "@/components/ShippingSettingsDialog";
@@ -76,11 +78,14 @@ const AUTO_REFRESH_INTERVAL = 30 * 60 * 1000; // 30 minutes
 const SHOPIFY_STORE_URL = process.env.NEXT_PUBLIC_SHOPIFY_STORE_URL || "";
 const DEFAULT_DELAYED_THRESHOLD_DAYS = 7;
 
-type Tab = "orders" | "influencer" | "analytics";
+type Tab = "orders" | "influencer" | "abandoned" | "analytics";
 
 // --- UTILITY FUNCTIONS ---
 function normalizeWhatsAppPhone(raw: string): string {
   let phone = raw.replace(/\D/g, "");
+  // Indian mobile numbers saved with a leading STD trunk prefix (e.g. "09414172040")
+  // leak through as 11 digits; strip the leading 0 so the country code prepends correctly.
+  if (phone.length === 11 && phone.startsWith("0")) phone = phone.slice(1);
   if (phone.length === 10) phone = `91${phone}`;
   return phone;
 }
@@ -268,6 +273,11 @@ function Sidebar({ activeTab, onTabChange }: SidebarProps) {
       id: "influencer",
       label: "Influencer",
       icon: <Users className="h-5 w-5" />,
+    },
+    {
+      id: "abandoned",
+      label: "Abandoned",
+      icon: <ShoppingCart className="h-5 w-5" />,
     },
     {
       id: "analytics",
@@ -1083,8 +1093,7 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays, shippingCo
       setTrackingInputs((prev) => ({ ...prev, [orderId]: "" }));
 
       if (waTab && order.customerPhone) {
-        let phone = order.customerPhone.replace(/\D/g, "");
-        if (phone.length === 10) phone = `91${phone}`;
+        const phone = normalizeWhatsAppPhone(order.customerPhone);
         const firstName = order.customerName.split(" ")[0];
 
         const E = {
@@ -1199,8 +1208,7 @@ Thank you for shopping with us! ${E.heart}
   };
 
   const handleWhatsAppFollowUp = async (order: Order) => {
-    let phone = order.customerPhone.replace(/\D/g, "");
-    if (phone.length === 10) phone = `91${phone}`;
+    const phone = normalizeWhatsAppPhone(order.customerPhone);
     const firstName = order.customerName.split(" ")[0];
 
     const E = {
@@ -1266,8 +1274,7 @@ Thank you! ${E.heart}
   };
 
   const handleWhatsAppReview = (order: Order) => {
-    let phone = order.customerPhone.replace(/\D/g, "");
-    if (phone.length === 10) phone = `91${phone}`;
+    const phone = normalizeWhatsAppPhone(order.customerPhone);
     const heart = String.fromCodePoint(0x1F49C);
     const message = `Hi ${order.customerName}! Thank you for shopping with UrbanNaari. We hope you're loving your order (${order.orderNumber}). We'd really appreciate it if you could share your experience with us — it helps other shoppers too! Leave a review here: https://urbannaari.co.in\n\nThank you! ${heart}\n— Team UrbanNaari`;
     const url = new URL(`https://web.whatsapp.com/send`);
@@ -1277,8 +1284,7 @@ Thank you! ${E.heart}
   };
 
   const handleRtoWhatsApp = (order: Order) => {
-    let phone = order.customerPhone.replace(/\D/g, "");
-    if (phone.length === 10) phone = `91${phone}`;
+    const phone = normalizeWhatsAppPhone(order.customerPhone);
     const firstName = order.customerName.split(" ")[0];
 
     const E = {
@@ -1312,8 +1318,7 @@ Thank you! ${E.heart}
   };
 
   const handleRtoFollowUp = (order: Order) => {
-    let phone = order.customerPhone.replace(/\D/g, "");
-    if (phone.length === 10) phone = `91${phone}`;
+    const phone = normalizeWhatsAppPhone(order.customerPhone);
     const firstName = order.customerName.split(" ")[0];
 
     const E = {
@@ -3113,6 +3118,9 @@ export default function DashboardCommandCenter() {
 
           {/* Influencer tab */}
           {activeTab === "influencer" && <InfluencerSection />}
+
+          {/* Abandoned checkouts tab */}
+          {activeTab === "abandoned" && <AbandonedCheckoutsSection />}
 
           {/* Analytics tab */}
           {activeTab === "analytics" && (
