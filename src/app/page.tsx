@@ -244,7 +244,6 @@ const statuses: Array<{ value: string; label: string }> = [
   { value: "RTO Received", label: "RTO Received" },
   { value: "Return Initiated", label: "Return Initiated" },
   { value: "Return Complete", label: "Return Complete" },
-  { value: "Cancelled", label: "Cancelled" },
 ];
 
 // =============================================================================
@@ -401,10 +400,11 @@ function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 interface StatsCardsDarkProps {
   orders: Order[];
   delayThresholdDays: number;
+  shippingConfig: ShippingRateTable;
   onDelayedClick?: () => void;
 }
 
-function StatsCardsDark({ orders, delayThresholdDays, onDelayedClick }: StatsCardsDarkProps) {
+function StatsCardsDark({ orders, delayThresholdDays, shippingConfig, onDelayedClick }: StatsCardsDarkProps) {
   const total = orders.length;
   const unfulfilled = orders.filter(
     (o) => o.deliveryStatus === "Unfulfilled"
@@ -438,6 +438,18 @@ function StatsCardsDark({ orders, delayThresholdDays, onDelayedClick }: StatsCar
         o.deliveryStatus === "Delivered"
     )
     .reduce((sum, o) => sum + (o.orderTotal || 0), 0);
+
+  const shippingPendingAmount = orders.reduce((sum, o) => {
+    if (o.shippingChargePaid) return sum;
+    if (o.deliveryStatus === "Cancelled" || o.deliveryStatus === "Unfulfilled") return sum;
+    const charge = calculateShippingCharge(
+      o.weightGrams,
+      o.paymentMethod,
+      o.shippingMode,
+      shippingConfig
+    );
+    return charge !== null ? sum + charge : sum;
+  }, 0);
 
   const stats: Array<{
     title: string;
@@ -512,10 +524,20 @@ function StatsCardsDark({ orders, delayThresholdDays, onDelayedClick }: StatsCar
       accentColor: "text-orange-400",
       glowColor: "shadow-orange-500/10",
     },
+    {
+      title: "Shipping Pending",
+      value:
+        shippingPendingAmount > 0
+          ? `₹${shippingPendingAmount.toLocaleString("en-IN")}`
+          : "₹0",
+      icon: <Truck className="h-5 w-5" />,
+      accentColor: "text-cyan-400",
+      glowColor: "shadow-cyan-500/10",
+    },
   ];
 
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-9 gap-2">
+    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-10 gap-2">
       {stats.map((stat) => (
         <div
           key={stat.title}
@@ -901,11 +923,21 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays, shippingCo
     try {
       const newStatus =
         currentStatus === "Collected" ? "Pending" : "Collected";
-      await fetch(`/api/orders/${orderId}/cod-status`, {
+      const res = await fetch(`/api/orders/${orderId}/cod-status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ codCollectionStatus: newStatus }),
       });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.success === false) {
+        alert(`COD update failed: ${json?.error || res.statusText}`);
+        return;
+      }
+      if (json?.shopifyWarning) {
+        alert(
+          `COD marked ${newStatus} in Notion, but Shopify mark-paid failed: ${json.shopifyWarning}`
+        );
+      }
       onOrderUpdated?.();
     } finally {
       setActionLoading(null);
@@ -917,6 +949,25 @@ function OrderTableDark({ orders, onOrderUpdated, delayThresholdDays, shippingCo
     const orderEl = orders.find((o) => o.id === orderId);
     if (orderEl) orderEl.weightGrams = weight;
     onOrderUpdated?.();
+  };
+
+  const handleShippingPaidToggle = async (orderId: string, currentPaid: boolean) => {
+    setActionLoading(`shipping-paid-${orderId}`);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/shipping-paid`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shippingChargePaid: !currentPaid }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.success === false) {
+        alert(`Shipping paid update failed: ${json?.error || res.statusText}`);
+        return;
+      }
+      onOrderUpdated?.();
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleShippingModeChange = async (orderId: string, mode: string | null) => {
@@ -1478,6 +1529,29 @@ Thank you! ${E.heart}
                           {order.customerName}
                         </span>
                         <PaymentBadgeDark method={order.paymentMethod} />
+                        {order.paymentMethod === "COD" &&
+                          order.deliveryStatus !== "Unfulfilled" &&
+                          (order.codCollectionStatus === "Collected" ? (
+                            <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-0.5">
+                              <Check className="h-2.5 w-2.5" />
+                              Paid
+                            </span>
+                          ) : order.deliveryStatus === "RTO Received" ||
+                            order.deliveryStatus === "RTO Confirmed" ? (
+                            <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-zinc-500/10 text-zinc-500 border border-zinc-500/30 line-through">
+                              ₹{order.orderTotal} due
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                              ₹{order.orderTotal} due
+                            </span>
+                          ))}
+                        {order.shippingChargePaid && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 inline-flex items-center gap-0.5">
+                            <Truck className="h-2.5 w-2.5" />
+                            Shipping Paid
+                          </span>
+                        )}
                         {delayed && (
                           <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-red-500/15 text-red-400 border border-red-500/30">
                             Delayed
@@ -1982,6 +2056,35 @@ Thank you! ${E.heart}
                             onWeightSaved={handleWeightSaved}
                           />
 
+                          {/* Shipping Paid toggle */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={actionLoading === `shipping-paid-${order.id}`}
+                            onClick={() =>
+                              handleShippingPaidToggle(
+                                order.id,
+                                order.shippingChargePaid
+                              )
+                            }
+                            className={
+                              order.shippingChargePaid
+                                ? "border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 bg-transparent"
+                                : "border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 bg-transparent"
+                            }
+                          >
+                            {actionLoading === `shipping-paid-${order.id}` ? (
+                              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                            ) : order.shippingChargePaid ? (
+                              <Check className="h-3.5 w-3.5 mr-1.5" />
+                            ) : (
+                              <Truck className="h-3.5 w-3.5 mr-1.5" />
+                            )}
+                            {order.shippingChargePaid
+                              ? "Shipping Paid"
+                              : "Mark Shipping Paid"}
+                          </Button>
+
                           {/* Initiate RTO */}
                           {order.deliveryStatus === "Undelivered" && (
                             <Button
@@ -2289,6 +2392,11 @@ Thank you! ${E.heart}
                             {order.trackingTimeline?.length > 0 && (
                               <span className="text-zinc-600">
                                 ({order.trackingTimeline.length} events)
+                              </span>
+                            )}
+                            {order.lastUpdated && (
+                              <span className="text-zinc-600 ml-2">
+                                · Last synced {formatDate(order.lastUpdated)}
                               </span>
                             )}
                             {timelineOpen.has(order.id) ? (
@@ -3009,6 +3117,7 @@ export default function DashboardCommandCenter() {
               <StatsCardsDark
                 orders={orders}
                 delayThresholdDays={delayThresholdDays}
+                shippingConfig={shippingConfig}
                 onDelayedClick={() => setShowDelayedOnly((prev) => !prev)}
               />
 

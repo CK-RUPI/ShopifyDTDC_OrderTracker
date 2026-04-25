@@ -341,6 +341,28 @@ export async function getOrderLineItems(
   }));
 }
 
+export async function markShopifyOrderPaid(shopifyOrderId: string): Promise<void> {
+  // Record a capture transaction. If the order has an outstanding authorization
+  // (manual-payment COD), kind=capture will mark financial_status=paid. If no
+  // authorization exists, fall back to kind=sale.
+  try {
+    await shopifyFetch(`/orders/${shopifyOrderId}/transactions.json`, {
+      method: "POST",
+      body: { transaction: { kind: "capture", status: "success" } },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/no.*authorization|cannot.*capture/i.test(msg)) {
+      await shopifyFetch(`/orders/${shopifyOrderId}/transactions.json`, {
+        method: "POST",
+        body: { transaction: { kind: "sale", status: "success" } },
+      });
+      return;
+    }
+    throw err;
+  }
+}
+
 export async function cancelShopifyOrder(shopifyOrderId: string, reason?: string): Promise<void> {
   // Add cancellation reason as order note before cancelling
   if (reason) {

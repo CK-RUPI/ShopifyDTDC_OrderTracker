@@ -26,6 +26,8 @@ let cachedInfluencerDbId: string | null = null;
 let shippingModePropertyCreated = false;
 let reviewEmailPropertyCreated = false;
 let weightPropertyCreated = false;
+let shippingChargePaidPropertyCreated = false;
+let influencerShippingChargePaidPropertyCreated = false;
 let cancelReasonPropertyCreated = false;
 let whatsappPropertyCreated = false;
 let dtdcFieldsPropertyCreated = false;
@@ -253,6 +255,7 @@ function parseOrder(page: Record<string, unknown>): Order {
     reviewEmailSent: getCheckbox(props["Review Email Sent"]),
     shippingMode: (shippingModeRaw || (paymentMethod === "COD" ? "Road" : "Air")) as "Air" | "Road",
     weightGrams,
+    shippingChargePaid: getCheckbox(props["Shipping Charge Paid"]),
     cancellationReason: getText(props["Cancellation Reason"]),
     whatsappSent: getCheckbox(props["WhatsApp Sent"]),
     codConfirmationStatus: (getSelect(props["COD Confirmed"]) || "") as CodConfirmationStatus,
@@ -367,6 +370,7 @@ function parseInfluencerShipment(page: Record<string, unknown>): InfluencerShipm
     phoneNumber: getText(props["Phone Number"]),
     instagramHandle: getText(props["Instagram Handle"]),
     isJaipurInfluencer: getCheckbox(props["Jaipur Influencer"]),
+    shippingChargePaid: getCheckbox(props["Shipping Charge Paid"]),
   };
 }
 
@@ -442,9 +446,16 @@ export const notionProvider: DataProvider = {
       return !isNaN(num) && num > 1025;
     });
 
+    // Always hide Cancelled from the dashboard — they're visible in Shopify admin only
+    orders = orders.filter((o) => o.deliveryStatus !== "Cancelled");
+
     // Client-side filter: hide terminal statuses (can't filter in Notion until option exists)
     if (filters?.hideDelivered) {
-      orders = orders.filter((o) => o.deliveryStatus !== "RTO Received" && o.deliveryStatus !== "Cancelled");
+      orders = orders.filter(
+        (o) =>
+          o.deliveryStatus !== "RTO Received" &&
+          o.deliveryStatus !== "Return Complete"
+      );
     }
 
     if (filters?.search) {
@@ -805,6 +816,37 @@ export const notionProvider: DataProvider = {
     if (!res.ok) {
       const errorBody = await res.text();
       console.error(`Notion updateOrderWeight failed for ${orderId}: ${res.status}`, errorBody);
+      throw new Error(`Notion update failed: ${res.status}`);
+    }
+  },
+
+  async updateShippingChargePaid(orderId: string, paid: boolean): Promise<void> {
+    if (!shippingChargePaidPropertyCreated) {
+      const databaseId = await getDatabaseId();
+      await fetch(`${NOTION_API}/databases/${databaseId}`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({
+          properties: {
+            "Shipping Charge Paid": { checkbox: {} },
+          },
+        }),
+      });
+      shippingChargePaidPropertyCreated = true;
+    }
+
+    const res = await fetch(`${NOTION_API}/pages/${orderId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: {
+          "Shipping Charge Paid": { checkbox: paid },
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`Notion updateShippingChargePaid failed for ${orderId}: ${res.status}`, errorBody);
       throw new Error(`Notion update failed: ${res.status}`);
     }
   },
@@ -1342,6 +1384,43 @@ export const notionProvider: DataProvider = {
     if (!res.ok) {
       const errorBody = await res.text();
       console.error(`Failed to mark delivered: ${res.status}`, errorBody);
+      throw new Error(`Notion update failed: ${res.status}`);
+    }
+  },
+
+  async updateInfluencerShippingChargePaid(
+    shipmentId: string,
+    paid: boolean
+  ): Promise<void> {
+    if (!influencerShippingChargePaidPropertyCreated) {
+      const dbId = await getInfluencerDatabaseId();
+      await fetch(`${NOTION_API}/databases/${dbId}`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({
+          properties: {
+            "Shipping Charge Paid": { checkbox: {} },
+          },
+        }),
+      });
+      influencerShippingChargePaidPropertyCreated = true;
+    }
+
+    const res = await fetch(`${NOTION_API}/pages/${shipmentId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: {
+          "Shipping Charge Paid": { checkbox: paid },
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(
+        `Notion updateInfluencerShippingChargePaid failed for ${shipmentId}: ${res.status}`,
+        errorBody
+      );
       throw new Error(`Notion update failed: ${res.status}`);
     }
   },

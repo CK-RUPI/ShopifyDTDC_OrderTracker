@@ -65,6 +65,7 @@ export interface Order {
   reviewEmailSent: boolean;
   shippingMode: "Air" | "Road" | "";
   weightGrams: number;
+  shippingChargePaid: boolean;
   cancellationReason: string;
   whatsappSent: boolean;
   codConfirmationStatus: CodConfirmationStatus;
@@ -108,6 +109,7 @@ export interface InfluencerShipment {
   phoneNumber: string;
   instagramHandle: string;
   isJaipurInfluencer: boolean;
+  shippingChargePaid: boolean;
 }
 
 export interface ShippingRateSlab {
@@ -188,6 +190,7 @@ export interface DataProvider {
     mode: "Air" | "Road"
   ): Promise<void>;
   updateOrderWeight(orderId: string, weightGrams: number): Promise<void>;
+  updateShippingChargePaid(orderId: string, paid: boolean): Promise<void>;
   updateRtoTracking(
     orderId: string,
     rtoTrackingNumber: string
@@ -236,6 +239,7 @@ export interface DataProvider {
     }
   ): Promise<void>;
   markInfluencerDelivered(shipmentId: string): Promise<void>;
+  updateInfluencerShippingChargePaid(shipmentId: string, paid: boolean): Promise<void>;
   updateInfluencerTrackingNumber(
     shipmentId: string,
     trackingNumber: string

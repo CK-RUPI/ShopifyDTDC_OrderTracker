@@ -34,6 +34,8 @@ import {
   Video,
   Undo2,
   AlertTriangle,
+  Truck,
+  Check,
 } from "lucide-react";
 
 // Dark-themed status badge matching the orders table
@@ -390,6 +392,31 @@ export function InfluencerSection() {
     });
   };
 
+  const handleToggleInfluencerShippingPaid = async (
+    shipmentId: string,
+    currentPaid: boolean
+  ) => {
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/influencer/${shipmentId}/shipping-paid`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shippingChargePaid: !currentPaid }),
+      });
+      const data = await res.json();
+      if (!res.ok || data?.success === false) {
+        setMessage({
+          type: "error",
+          text: data?.error || "Failed to update shipping paid",
+        });
+        return;
+      }
+      fetchShipments();
+    } catch {
+      setMessage({ type: "error", text: "Failed to update shipping paid" });
+    }
+  };
+
   const handleMarkDelivered = async (shipmentId: string) => {
     setMessage(null);
     try {
@@ -659,6 +686,12 @@ export function InfluencerSection() {
                               {shipment.attemptCount} attempts
                             </span>
                           )}
+                          {shipment.shippingChargePaid && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 inline-flex items-center gap-0.5">
+                              <Truck className="h-2.5 w-2.5" />
+                              Shipping Paid
+                            </span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -873,23 +906,49 @@ export function InfluencerSection() {
                               </div>
                             )}
 
-                            {/* Mark Delivered for Jaipur influencers */}
-                            {shipment.isJaipurInfluencer && shipment.deliveryStatus !== "Delivered" && (
-                              <div className="mb-3">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-xs border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleMarkDelivered(shipment.id);
-                                  }}
-                                >
-                                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                                  Mark Delivered
-                                </Button>
-                              </div>
-                            )}
+                            {/* Mark Delivered for Jaipur influencers + Shipping Paid toggle */}
+                            <div className="mb-3 flex flex-wrap items-center gap-2">
+                              {shipment.isJaipurInfluencer &&
+                                shipment.deliveryStatus !== "Delivered" && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleMarkDelivered(shipment.id);
+                                    }}
+                                  >
+                                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                                    Mark Delivered
+                                  </Button>
+                                )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className={`h-7 text-xs ${
+                                  shipment.shippingChargePaid
+                                    ? "border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+                                    : "border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                                }`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleInfluencerShippingPaid(
+                                    shipment.id,
+                                    shipment.shippingChargePaid
+                                  );
+                                }}
+                              >
+                                {shipment.shippingChargePaid ? (
+                                  <Check className="h-3 w-3 mr-1" />
+                                ) : (
+                                  <Truck className="h-3 w-3 mr-1" />
+                                )}
+                                {shipment.shippingChargePaid
+                                  ? "Shipping Paid"
+                                  : "Mark Shipping Paid"}
+                              </Button>
+                            </div>
                             {/* Status actions */}
                             {shipment.deliveryStatus === "Delivered" && (
                               <div className="flex gap-2 mb-3">
