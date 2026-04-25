@@ -19,7 +19,12 @@ export async function POST() {
     const results: Array<{ trackingNumber: string; status: string; error?: string }> = [];
 
     for (const shipment of activeShipments) {
-      if (!shipment.trackingNumber || shipment.isJaipurInfluencer) continue;
+      if (
+        !shipment.trackingNumber ||
+        shipment.isJaipurInfluencer ||
+        shipment.deliveryStatus === "Video Received" ||
+        shipment.deliveryStatus === "Completed"
+      ) continue;
 
       const result = await trackShipment(shipment.trackingNumber);
 

@@ -7,11 +7,14 @@ Internal dashboard for tracking Urban Naari Shopify orders via DTDC courier. Pul
 - **Shopify sync** — pulls all fulfilled orders with tracking numbers
 - **DTDC tracking** — fetches live status, milestones, and delivery timeline
 - **Notion storage** — all data stored in the cloud, accessible from any device
-- **Command Center dashboard** — dark theme with Orders, Influencer, and Analytics tabs
+- **Command Center dashboard** — dark theme with Orders, Influencer, Abandoned Checkouts, and Analytics tabs
 - **Auto-refresh** — polls DTDC every 30 minutes for non-delivered orders
-- **COD tracking** — pending amount display and collection toggle per order
+- **COD tracking** — pending amount display, collection toggle, and Shopify mark-as-paid sync
+- **Shipping charge tracking** — per-order "Shipping Paid" toggle (orders + influencer) with a dashboard "Shipping Pending" widget summing unpaid courier charges
+- **WhatsApp automation** — auto-send messages for COD confirmation, fulfilment + tracking, RTO follow-ups, and abandoned-checkout recovery (paired with a Chrome extension that auto-clicks Send)
+- **Abandoned checkouts** — list, message, and track recovery attempts; supports image-grid clipboard for product photos
 - **Delivery emails** — manually triggered delivery confirmation emails via SMTP
-- **Influencer shipments** — separate tracking for influencer packages
+- **Influencer shipments** — separate tracking, product checklist, video-received workflow, Jaipur in-person flow
 - **Analytics** — delivery rate, RTO rate, stuck orders, COD collection %, top destinations
 
 ## Setup
@@ -71,6 +74,21 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Scripts
+
+<!-- AUTO-GENERATED:scripts (sourced from package.json) -->
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start the Next.js development server with hot reload |
+| `npm run build` | Production build (Next.js compile + type check) |
+| `npm start` | Run the production build (after `npm run build`) |
+| `npm run lint` | Run ESLint over the project |
+| `npx tsx src/lib/notion-setup.ts` | One-time: create the Orders database in your Notion page |
+| `npx tsc --noEmit` | Run a TypeScript type check without emitting files |
+
+<!-- /AUTO-GENERATED:scripts -->
+
 ## Usage
 
 1. **Sync Orders** — pulls latest fulfilled orders from Shopify into Notion
@@ -87,18 +105,63 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## API Routes
 
+<!-- AUTO-GENERATED:api-routes (sourced from src/app/api/**/route.ts) -->
+
+### Orders
+
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/api/orders` | GET | Fetch orders with filters |
+| `/api/orders` | GET | List orders with `status`, `search`, `shippingMode`, `hideDelivered` filters |
 | `/api/orders/[id]/status` | PATCH | Update delivery status |
-| `/api/orders/[id]/cod-status` | PATCH | Toggle COD collection |
-| `/api/orders/[id]/rto-tracking` | PATCH | Save RTO tracking number |
-| `/api/shopify/sync` | POST | Sync fulfilled orders from Shopify |
-| `/api/tracking/refresh` | POST | Refresh DTDC tracking for all active orders |
-| `/api/email/delivery` | POST | Send delivery confirmation email |
-| `/api/email/preview` | GET | Preview delivery email HTML (pass `?orderId=`) |
+| `/api/orders/[id]/cod-status` | PATCH | Toggle COD collection (also marks Shopify as paid on Collected) |
+| `/api/orders/[id]/shipping-paid` | PATCH | Toggle "Shipping charge paid to courier" flag |
+| `/api/orders/[id]/shipping-mode` | PATCH | Set Air or Road shipping mode |
+| `/api/orders/[id]/weight` | PATCH | Save package weight (drives shipping-charge calculation) |
+| `/api/orders/[id]/rto-tracking` | PATCH | Save the return AWB for an RTO |
+| `/api/orders/[id]/assign-tracking` | POST | Attach a DTDC tracking number to an unfulfilled order (creates Shopify fulfillment) |
+| `/api/orders/[id]/refresh` | POST | Re-pull DTDC tracking for a single order |
+| `/api/orders/[id]/cancel` | POST | Cancel order in Notion + Shopify |
+| `/api/orders/[id]/line-items` | GET | Fetch Shopify line items for an order |
+| `/api/orders/[id]/whatsapp-status` | POST/PATCH/PUT | Mark COD-confirmation WA sent, update confirmation, record follow-up |
+| `/api/orders/[id]/rto-whatsapp-status` | POST/PATCH/PUT | Mark RTO WA sent, update reachability, record follow-up |
+
+### Tracking + Shopify
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/tracking/refresh` | POST | Bulk refresh DTDC tracking for every active order |
+| `/api/shopify/sync` | POST | Pull fulfilled + unfulfilled orders from Shopify into Notion |
+| `/api/shopify/abandoned-checkouts` | GET | Pull abandoned checkouts from Shopify |
+
+### Email
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/email/delivery` | POST | Send delivery-confirmation email to customer |
+| `/api/email/review` | POST | Send post-delivery review-request email |
+| `/api/email/preview` | GET | Preview delivery email HTML in the browser (`?orderId=`) |
+
+### Influencer Shipments
+
+| Route | Method | Purpose |
+|-------|--------|---------|
 | `/api/influencer` | GET/POST | List or create influencer shipments |
-| `/api/influencer/refresh` | POST | Refresh DTDC tracking for influencer shipments |
+| `/api/influencer/refresh` | POST | Refresh DTDC tracking for all active influencer shipments (skips Video Received / Completed so manual progress isn't overwritten) |
+| `/api/influencer/product-lookup` | POST | Resolve a Shopify product handle for the product checklist |
+| `/api/influencer/[id]/tracking` | PUT | Set/update the influencer shipment tracking number |
+| `/api/influencer/[id]/products` | GET/PUT | Read or update the influencer product checklist |
+| `/api/influencer/[id]/status` | PUT | Update influencer delivery status (e.g. Video Received, Completed) |
+| `/api/influencer/[id]/mark-delivered` | POST | Mark a Jaipur (in-person) shipment as delivered |
+| `/api/influencer/[id]/shipping-paid` | PATCH | Toggle "Shipping charge paid to courier" for influencer |
+
+### Abandoned Checkouts
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/abandoned-checkouts/[id]/wa-sent` | POST | Mark abandoned-checkout WA recovery sent |
+| `/api/abandoned-checkouts/item-images` | POST | Build a product-image grid for clipboard paste into WhatsApp |
+
+<!-- /AUTO-GENERATED:api-routes -->
 
 ## Key Behaviors
 
@@ -109,9 +172,13 @@ Open [http://localhost:3000](http://localhost:3000).
 - **Return window**: 48-hour return window tracked after delivery
 - **Delivery emails**: Branded template (coral palette matching website), manually triggered, with browser preview at `/api/email/preview?orderId=`
 - **Email test mode**: Set `EMAIL_TEST_MODE=true` to redirect all emails to `EMAIL_TEST_RECIPIENT` instead of customers
-- **Status mapping**: DTDC statuses map to 12 internal states: Booked, Picked Up, In Transit, At Destination, Out for Delivery, Delivered, Undelivered, Stuck, RTO, RTO Received, Return Initiated, Return Complete
-- **RTO flow**: Mark as RTO → enter RTO tracking number → RTO Received (when product arrives back)
+- **Status mapping**: DTDC statuses map to 17 internal states (`src/lib/data/types.ts`): Unfulfilled, Booked, Picked Up, In Transit, At Destination, Out for Delivery, Delivered, Undelivered, RTO, RTO Confirmed, RTO Received, Return Initiated, Return Complete, Video Received, Product Received Back, Completed, Cancelled
+- **RTO flow** (3-stage, all manual transitions): RTO → RTO Confirmed (after operator reaches customer) → RTO Received (when product arrives back at warehouse). DTDC RTO-prefix events do not auto-advance status.
 - **Return flow**: Delivered → Initiate Return → Mark Return Complete (when product arrives back)
+- **Cancelled orders**: hidden everywhere in the dashboard (cancel still writes to Notion + Shopify, just no row is rendered). Verify in Shopify admin.
+- **Return Complete**: hidden from main list; appears only when "Show Delivered" is toggled on.
+- **Status guard**: `src/lib/status-machine.ts` blocks invalid auto-transitions (e.g. RTO→Delivered) during DTDC refresh; manual transitions always allowed.
+- **Influencer terminal statuses**: `Video Received` and `Completed` are set manually after delivery and represent post-DTDC workflow state. `/api/influencer/refresh` skips shipments in these statuses entirely (no DTDC call, no Notion write), so refresh-tracking can never roll them back to `Delivered`.
 
 ## Tech Stack
 
@@ -124,25 +191,36 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Project Structure
 
+<!-- AUTO-GENERATED:project-structure (sourced from src/) -->
+
 ```
 src/
   app/
-    page.tsx                  # Main dashboard (all tabs, order table, analytics)
-    api/                      # API routes
+    page.tsx                  # Main dashboard (Orders / Influencer / Abandoned / Analytics tabs)
+    api/                      # API routes (see "API Routes" section)
   components/
     InfluencerSection.tsx     # Influencer tab
+    AbandonedCheckoutsSection.tsx # Abandoned-checkout WA recovery flow
     TrackingTimeline.tsx      # Tracking event timeline
     StatusBadge.tsx           # Color-coded status badges
+    WeightInput.tsx           # Weight input + calculated shipping charge badge
+    ShippingExportDialog.tsx  # Excel export of shipping charges
     ui/                       # shadcn/ui components
   lib/
     dtdc.ts                   # DTDC API integration & status mapping
-    shopify.ts                # Shopify Admin API client
+    shopify.ts                # Shopify Admin API client (sync, fulfillments, mark-paid, inventory)
     email.ts                  # SMTP email templates
+    shipping.ts               # Shipping rate slabs + calculateShippingCharge()
+    status-machine.ts         # Allowed transitions + DTDC-driven status resolver
     data/
-      types.ts                # TypeScript interfaces (Order, TrackingEvent, etc.)
-      notion.ts               # Notion database CRUD operations
+      types.ts                # TypeScript interfaces (Order, InfluencerShipment, etc.)
+      notion.ts               # Notion database CRUD + lazy schema migrations
       index.ts                # Data provider export
+whatsapp-autosend-extension/  # Chrome extension that auto-clicks WA Web Send on /send?text= links
+scripts/                      # One-off debug/migration scripts (e.g. debug-checkout.ts)
 ```
+
+<!-- /AUTO-GENERATED:project-structure -->
 
 ## Shopify App Setup
 
