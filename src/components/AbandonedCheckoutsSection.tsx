@@ -389,6 +389,9 @@ ${recoveryLine}-- Team Urban Naari`;
               {displayed.map((checkout) => {
                 const isExpanded = expandedId === checkout.id;
                 const hasPhone = hasValidPhone(checkout.customerPhone);
+                const isStillActive =
+                  Date.now() - new Date(checkout.updatedAt).getTime() <
+                  60 * 60 * 1000;
 
                 return (
                   <Fragment key={checkout.id}>
@@ -434,7 +437,17 @@ ${recoveryLine}-- Team Urban Naari`;
                         {checkout.lineItems.length !== 1 ? "s" : ""}
                       </TableCell>
                       <TableCell className="py-3 text-sm text-zinc-500">
-                        {timeAgo(checkout.updatedAt)}
+                        <div className="flex items-center gap-2">
+                          <span>{timeAgo(checkout.updatedAt)}</span>
+                          {isStillActive && (
+                            <span
+                              title="Updated in the last hour — customer may still be in checkout"
+                              className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-400"
+                            >
+                              Still active
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="py-3 text-right">
                         <div className="inline-flex items-center gap-1.5">

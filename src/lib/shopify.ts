@@ -123,15 +123,18 @@ interface ShopifyCheckout {
 }
 
 export async function getAbandonedCheckouts(): Promise<AbandonedCheckout[]> {
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const data = (await shopifyFetch(
-    `/checkouts.json?updated_at_max=${encodeURIComponent(oneHourAgo)}&updated_at_min=${encodeURIComponent(sevenDaysAgo)}&limit=50`
+    `/checkouts.json?updated_at_min=${encodeURIComponent(sevenDaysAgo)}&limit=250`
   )) as { checkouts: ShopifyCheckout[] };
 
   return (data.checkouts || [])
     .filter((c) => c.completed_at === null)
+    .sort(
+      (a, b) =>
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    )
     .map((c) => ({
       id: String(c.id),
       customerName:
