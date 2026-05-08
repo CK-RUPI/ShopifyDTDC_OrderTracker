@@ -35,6 +35,7 @@ let dtdcFieldsInfluencerCreated = false;
 let followUpPropertyCreated = false;
 let rtoWhatsappPropertyCreated = false;
 let rtoFollowUpPropertyCreated = false;
+let ofdWhatsappPropertyCreated = false;
 
 async function ensureDtdcFieldProperties(databaseId: string, isInfluencer: boolean) {
   const flag = isInfluencer ? dtdcFieldsInfluencerCreated : dtdcFieldsPropertyCreated;
@@ -265,6 +266,7 @@ function parseOrder(page: Record<string, unknown>): Order {
     rtoConfirmationStatus: (getSelect(props["RTO Confirmed Status"]) || "") as RtoConfirmationStatus,
     rtoFollowUpCount: (props["RTO Follow-Up Count"] as { number?: number | null } | undefined)?.number ?? 0,
     rtoLastFollowUpDate: getText(props["RTO Last Follow-Up"]),
+    ofdWhatsappSent: getCheckbox(props["OFD WhatsApp Sent"]),
   };
 }
 
@@ -539,6 +541,7 @@ export const notionProvider: DataProvider = {
       delete updateProps["COD Confirmed"];
       delete updateProps["RTO WhatsApp Sent"];
       delete updateProps["RTO Confirmed Status"];
+      delete updateProps["OFD WhatsApp Sent"];
       const res = await fetch(`${NOTION_API}/pages/${pageId}`, {
         method: "PATCH",
         headers: headers(),
@@ -1134,6 +1137,42 @@ export const notionProvider: DataProvider = {
     if (!res.ok) {
       const errorBody = await res.text();
       console.error(`Notion updateRtoConfirmation failed for ${orderId}: ${res.status}`, errorBody);
+      throw new Error(`Notion update failed: ${res.status}`);
+    }
+  },
+
+  async markOfdWhatsAppSent(orderId: string): Promise<void> {
+    if (!ofdWhatsappPropertyCreated) {
+      const databaseId = await getDatabaseId();
+      const schemaRes = await fetch(`${NOTION_API}/databases/${databaseId}`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({
+          properties: {
+            "OFD WhatsApp Sent": { checkbox: {} },
+          },
+        }),
+      });
+      if (!schemaRes.ok) {
+        const body = await schemaRes.text();
+        console.error(`Failed to create OFD WhatsApp schema property: ${schemaRes.status}`, body);
+        throw new Error(`Notion schema update failed: ${schemaRes.status}`);
+      }
+      ofdWhatsappPropertyCreated = true;
+    }
+
+    const res = await fetch(`${NOTION_API}/pages/${orderId}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({
+        properties: {
+          "OFD WhatsApp Sent": { checkbox: true },
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`Notion markOfdWhatsAppSent failed for ${orderId}: ${res.status}`, errorBody);
       throw new Error(`Notion update failed: ${res.status}`);
     }
   },

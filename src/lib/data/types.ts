@@ -75,6 +75,7 @@ export interface Order {
   rtoConfirmationStatus: RtoConfirmationStatus;
   rtoFollowUpCount: number;
   rtoLastFollowUpDate: string;
+  ofdWhatsappSent: boolean;
 }
 
 export interface Product {
@@ -209,6 +210,7 @@ export interface DataProvider {
   markRtoWhatsAppSent(orderId: string): Promise<void>;
   updateRtoConfirmation(orderId: string, status: "Reachable" | "Cancel" | "No Reply"): Promise<void>;
   recordRtoFollowUp(orderId: string): Promise<void>;
+  markOfdWhatsAppSent(orderId: string): Promise<void>;
   getOrderById(orderId: string): Promise<Order | null>;
   // Influencer shipments
   getInfluencerShipments(): Promise<InfluencerShipment[]>;

@@ -89,6 +89,7 @@ export async function POST() {
         rtoConfirmationStatus: "",
         rtoFollowUpCount: 0,
         rtoLastFollowUpDate: "",
+        ofdWhatsappSent: false,
       });
       synced++;
     }
@@ -158,6 +159,7 @@ export async function POST() {
         rtoConfirmationStatus: "",
         rtoFollowUpCount: 0,
         rtoLastFollowUpDate: "",
+        ofdWhatsappSent: false,
       });
       unfulfilled++;
     }
